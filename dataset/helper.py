@@ -13,13 +13,55 @@
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.'''
 
+import cv2
+import csv
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
+import os
+import sys
+sys.path.append('/home/steve/git/CreateNormals/')
+from python.calc_normals import NormalCalculation
+
+label_nyu_mapping = dict()
+label_nyu_mapping[0] = 0
+with open('/media/steve/Lilim/scannetv2-labels.combined.tsv') as tsvfile:
+    reader = csv.reader(tsvfile, delimiter='\t')
+    start = True
+    for row in reader:
+        if not start:
+            label_nyu_mapping[int(row[0])] = int(row[4])
+        start = False
+
+def _read_images_function(image_file, depth_file, label_file, num_classes):
+    image_decoded = cv2.imread(image_file.decode())
+    depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
+    label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
+    print(label_file.decode())
+    print(label_decoded)
+    label_shape = (480,640)
+    label_nyu = np.array([label_nyu_mapping[x] for x in label_decoded.flatten()])
+    label_nyu = label_nyu.reshape(label_shape)
+    #label_decoded = cv2.resize(cv2.imread(label, cv2.IMREAD_ANYDEPTH), (640,480), interpolation=cv2.INTER_NEAREST)
+    return image_decoded, depth_decoded, label_decoded, num_classes
 
 def get_train_batch(config):
-    filenames = [config['train_data']]
-    dataset = tf.data.TFRecordDataset(filenames)
-    dataset = dataset.map(lambda x: parser(x, config['num_classes']))
+    filenames = config['train_data']
+    image_files = []
+    depth_files = []
+    label_files = []
+    with open(filenames, 'r') as text_file:
+        for line in text_file:
+            splits = line.split(',')
+            image_files.append(splits[0])
+            depth_files.append(splits[1])
+            label_files.append(splits[2])
+
+    dataset = tf.data.Dataset.from_tensor_slices((image_files, depth_files, label_files))
+    dataset = dataset.map(
+    lambda image_file, depth_file, label_file: tuple(tf.py_func(
+        _read_images_function, [image_file, depth_file, label_file, config['num_classes']], [tf.uint8, tf.uint16, tf.uint16, tf.int32])))
+    dataset = dataset.map(parser)
     dataset = dataset.shuffle(buffer_size=100)
     dataset = dataset.batch(config['batch_size'])
     dataset = dataset.repeat(100)
@@ -77,22 +119,18 @@ def compute_iou(output_matrix):
     # IoU in percent form (doesn't count label id 0 contribution as it is assumed to be void) 
     return np.sum(output_matrix[1:, 0]/(np.sum(output_matrix[1:, :], 1).astype(np.float32)+1e-10))/(output_matrix.shape[0]-1)*100
 
-def parser(proto_data, num_classes):
+def parser(image_decoded, depth_decoded, label_decoded, num_classes):
 
-    features = {'height':tf.FixedLenFeature((), tf.int64, default_value=0),
-                'width':tf.FixedLenFeature((), tf.int64, default_value=0),
-                'modality1':tf.FixedLenFeature((), tf.string, default_value=""),
-                'label':tf.FixedLenFeature((), tf.string, default_value="")
-               }
-    parsed_features = tf.parse_single_example(proto_data, features)
-    modality1 = tf.decode_raw(parsed_features['modality1'], tf.uint8)
-    label = tf.decode_raw(parsed_features['label'], tf.uint8)
+    image_decoded.set_shape([None, None, None])
+    #depth_decoded.set_shape([None, None, None])
+    label_decoded.set_shape([None, None, None])
+    image_resized = tf.image.resize(image_decoded, [640, 480])
+    #depth_resized = tf.cast(tf.image.resize(depth_decoded, [640, 480], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
+    label_resized = tf.cast(tf.image.resize(label_decoded, [640, 480], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
 
-    height = tf.cast(parsed_features['height'], tf.int32)
-    width = tf.cast(parsed_features['width'], tf.int32)
-    label = tf.reshape(label, [height, width, 1])
+    label = tf.reshape(label_resized, [480, 640, 1])
     label = tf.one_hot(label, num_classes)
     label = tf.squeeze(label, axis=2)
-    modality1 = tf.reshape(modality1, [height, width, 3])
+    modality1 = tf.reshape(image_resized, [480, 640, 3])
 
-    return tf.cast(modality1, tf.float32), tf.cast(label, tf.int32)
+    return tf.cast(modality1, tf.float32), label
