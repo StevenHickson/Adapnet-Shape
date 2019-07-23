@@ -33,12 +33,23 @@ with open('/media/steve/Lilim/scannetv2-labels.combined.tsv') as tsvfile:
             label_nyu_mapping[int(row[0])] = int(row[4])
         start = False
 
+def read_raw_images(image_file, depth_file, label_file, num_classes):
+    image_decoded = tf.io.read_file(image_file)
+    depth_decoded = tf.io.read_file(depth_file)
+    label_decoded = tf.io.read_file(label_file)
+    return image_decoded, depth_decoded, label_decoded
+
 def _read_images_function(image_file, depth_file, label_file, num_classes):
-    image_decoded = cv2.imread(image_file.decode())
+    #image_decoded = tf.io.read_file(image_file.decode())
+    #print(image_file.decode())
+    #print(image_decoded)
+    image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
+    #depth_decoded = tf.io.read_file(depth_file.decode())
     depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
-    label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
-    print(label_file.decode())
-    print(label_decoded)
+    #label_decoded = tf.io.read_file(label_file.decode())
+    label_decoded = cv2.resize(cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH), (640,480), interpolation=cv2.INTER_NEAREST)
+    #print(label_file.decode())
+    #print(label_decoded)
     label_shape = (480,640)
     label_nyu = np.array([label_nyu_mapping[x] for x in label_decoded.flatten()])
     label_nyu = label_nyu.reshape(label_shape)
@@ -52,12 +63,13 @@ def get_train_batch(config):
     label_files = []
     with open(filenames, 'r') as text_file:
         for line in text_file:
-            splits = line.split(',')
+            splits = line.strip('\n').split(',')
             image_files.append(splits[0])
             depth_files.append(splits[1])
             label_files.append(splits[2])
 
     dataset = tf.data.Dataset.from_tensor_slices((image_files, depth_files, label_files))
+    #dataset = dataset.map(lambda image_file, depth_file, label_file: read_raw_images(image_file, depth_file, label_file, config['num_classes']))
     dataset = dataset.map(
     lambda image_file, depth_file, label_file: tuple(tf.py_func(
         _read_images_function, [image_file, depth_file, label_file, config['num_classes']], [tf.uint8, tf.uint16, tf.uint16, tf.int32])))
@@ -126,9 +138,10 @@ def parser(image_decoded, depth_decoded, label_decoded, num_classes):
     label_decoded.set_shape([None, None, None])
     image_resized = tf.image.resize(image_decoded, [640, 480])
     #depth_resized = tf.cast(tf.image.resize(depth_decoded, [640, 480], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
-    label_resized = tf.cast(tf.image.resize(label_decoded, [640, 480], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
+    #label_resized = tf.cast(tf.image.resize(label_decoded, [480, 640], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
+    label = tf.cast(label_decoded, tf.int32)
 
-    label = tf.reshape(label_resized, [480, 640, 1])
+    label = tf.reshape(label, [480, 640, 1])
     label = tf.one_hot(label, num_classes)
     label = tf.squeeze(label, axis=2)
     modality1 = tf.reshape(image_resized, [480, 640, 3])
