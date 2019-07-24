@@ -20,12 +20,12 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
 import sys
-sys.path.append('/home/steve/git/CreateNormals/')
-from python.calc_normals import NormalCalculation
+#sys.path.append('/home/steve/git/CreateNormals/')
+#from python.calc_normals import NormalCalculation
 
 label_nyu_mapping = dict()
 label_nyu_mapping[0] = 0
-with open('/media/steve/Lilim/scannetv2-labels.combined.tsv') as tsvfile:
+with open('/data4/scannetv2-labels.combined.tsv') as tsvfile:
     reader = csv.reader(tsvfile, delimiter='\t')
     start = True
     for row in reader:
@@ -43,7 +43,7 @@ def _read_images_function(image_file, depth_file, label_file, num_classes):
     #image_decoded = tf.io.read_file(image_file.decode())
     #print(image_file.decode())
     #print(image_decoded)
-    image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
+    image_decoded = cv2.resize(cv2.imread(image_file.decode(), cv2.IMREAD_COLOR), (640,480))
     #depth_decoded = tf.io.read_file(depth_file.decode())
     depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
     #label_decoded = tf.io.read_file(label_file.decode())
@@ -136,7 +136,7 @@ def parser(image_decoded, depth_decoded, label_decoded, num_classes):
     image_decoded.set_shape([None, None, None])
     #depth_decoded.set_shape([None, None, None])
     label_decoded.set_shape([None, None, None])
-    image_resized = tf.image.resize(image_decoded, [640, 480])
+    #image_resized = tf.image.resize(image_decoded, [640, 480])
     #depth_resized = tf.cast(tf.image.resize(depth_decoded, [640, 480], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
     #label_resized = tf.cast(tf.image.resize(label_decoded, [480, 640], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR), tf.int32)
     label = tf.cast(label_decoded, tf.int32)
@@ -144,6 +144,6 @@ def parser(image_decoded, depth_decoded, label_decoded, num_classes):
     label = tf.reshape(label, [480, 640, 1])
     label = tf.one_hot(label, num_classes)
     label = tf.squeeze(label, axis=2)
-    modality1 = tf.reshape(image_resized, [480, 640, 3])
+    modality1 = tf.reshape(image_decoded, [480, 640, 3])
 
     return tf.cast(modality1, tf.float32), label
