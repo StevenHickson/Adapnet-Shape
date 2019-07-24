@@ -42,10 +42,15 @@ def train_func(config):
                                                 config['num_classes']])
         model.build_graph(images_pl, labels_pl)
         model.create_optimizer()
+        tf.summary.image('rgb', images_pl)
+        tf.summary.image('label', tf.expand_dims(tf.cast(tf.math.argmax(labels_pl, axis=-1), tf.uint8), axis=-1))
+        tf.summary.image('estimate',  tf.expand_dims(tf.cast(tf.math.argmax(model.softmax, axis=-1), tf.uint8), axis=-1))
+        model._create_summaries()
  
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
     sess = tf.Session(config=config1)
+    writer = tf.summary.FileWriter('./graphs', sess.graph)
     sess.run(tf.global_variables_initializer())
     step = 0
     total_loss = 0.0
@@ -79,9 +84,10 @@ def train_func(config):
         try:
             img, label = sess.run([data_list[0], data_list[1]])
             feed_dict = {images_pl: img, labels_pl: label}
-            loss_batch, _ = sess.run([model.loss, model.train_op],
+            loss_batch, _, summary = sess.run([model.loss, model.train_op, model.summary_op],
                                      feed_dict=feed_dict)
-
+            if (step + 1) % config['summaries_step'] == 0:
+                writer.add_summary(summary)
             total_loss += loss_batch
 
             if (step + 1) % config['save_step'] == 0:
