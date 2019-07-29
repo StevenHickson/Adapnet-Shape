@@ -23,6 +23,7 @@ import sys
 #sys.path.append('/home/steve/git/CreateNormals/')
 #from python.calc_normals import NormalCalculation
 
+convert_to_20 = [0,1,2,3,4,5,6,7,8,9,10,11,12,9,13,20,14,20,4,20,2,0,0,0,15,20,0,0,16,0,20,0,20,17,18,20,19,0,20,20,0]
 label_nyu_mapping = dict()
 label_nyu_mapping[0] = 0
 with open('/data4/scannetv2-labels.combined.tsv') as tsvfile:
@@ -30,7 +31,7 @@ with open('/data4/scannetv2-labels.combined.tsv') as tsvfile:
     start = True
     for row in reader:
         if not start:
-            label_nyu_mapping[int(row[0])] = int(row[4])
+            label_nyu_mapping[int(row[0])] = convert_to_20(int(row[4]))
         start = False
 
 def read_raw_images(image_file, depth_file, label_file, num_classes):
