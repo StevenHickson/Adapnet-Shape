@@ -72,6 +72,17 @@ def colorize(value, vmin=None, vmax=None, cmap=None):
 
     return value
 
+def add_metric_summaries(images, label, estimate, num_classes):
+    labels_argmax = tf.math.argmax(label, axis=-1)
+    estimate_argmax = tf.math.argmax(estimate, axis=-1)
+    tf.summary.image('rgb', images)
+    tf.summary.image('label', colorize(labels_argmax, cmap='jet', vmin=0, vmax=num_classes))
+    tf.summary.image('estimate',  colorize(estimate_argmax, cmap='jet', vmin=0, vmax=num_classes))
+    mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels_argmax, predictions=estimate_argmax, num_classes=num_classes)
+    tf.summary.scalar('m_iou', mean_iou)
+    return mean_update_op
+
+
 def train_func(config):
     os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
@@ -79,6 +90,7 @@ def train_func(config):
     data_list, iterator = get_train_data(config)
     resnet_name = 'resnet_v2_50'
     global_step = tf.Variable(0, trainable=False, name='Global_Step')
+    step = 0
 
     with tf.variable_scope(resnet_name):
         model = model_func(num_classes=config['num_classes'], learning_rate=config['learning_rate'],
@@ -89,9 +101,7 @@ def train_func(config):
                                                 config['num_classes']])
         model.build_graph(images_pl, labels_pl)
         model.create_optimizer()
-        tf.summary.image('rgb', images_pl)
-        tf.summary.image('label', colorize(tf.math.argmax(labels_pl, axis=-1), cmap='jet', vmin=0, vmax=21))
-        tf.summary.image('estimate',  colorize(tf.math.argmax(model.softmax, axis=-1), cmap='jet', vmin=0, vmax=21))
+        mean_update_op = add_metric_summaries(images_pl, labels_pl, model.softmax, config['num_classes'])
         model._create_summaries()
  
     config1 = tf.ConfigProto()
@@ -99,7 +109,7 @@ def train_func(config):
     sess = tf.Session(config=config1)
     writer = tf.summary.FileWriter('./graphs', sess.graph)
     sess.run(tf.global_variables_initializer())
-    step = 0
+    sess.run(tf.local_variables_initializer())
     total_loss = 0.0
     t0 = None
     ckpt = tf.train.get_checkpoint_state(os.path.dirname(os.path.join(config['checkpoint'],
@@ -131,7 +141,7 @@ def train_func(config):
         try:
             img, label = sess.run([data_list[0], data_list[1]])
             feed_dict = {images_pl: img, labels_pl: label}
-            loss_batch, _, summary = sess.run([model.loss, model.train_op, model.summary_op],
+            loss_batch, _, summary, _ = sess.run([model.loss, model.train_op, model.summary_op, mean_update_op],
                                      feed_dict=feed_dict)
             if (step + 1) % config['summaries_step'] == 0:
                 writer.add_summary(summary)
