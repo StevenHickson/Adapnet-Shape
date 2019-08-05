@@ -36,7 +36,7 @@ class AdapNet_pp(network_base.Network):
         self.strides = [1, 2, 2, 1]
         self.global_step = global_step
         if self.training:
-            self.keep_prob = 0.3
+            self.keep_prob = 0.5
         else:
             self.keep_prob = 1.0
         if ignore_label:
