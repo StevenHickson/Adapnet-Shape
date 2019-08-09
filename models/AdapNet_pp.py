@@ -17,7 +17,7 @@ import network_base
 class AdapNet_pp(network_base.Network):
     def __init__(self, num_classes=12, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
-                 has_aux_loss=True):
+                 has_aux_loss=True, compute_normals=False):
         
         super(AdapNet_pp, self).__init__()
         self.num_classes = num_classes
@@ -35,6 +35,7 @@ class AdapNet_pp(network_base.Network):
         self.filters = [256, 512, 1024, 2048]
         self.strides = [1, 2, 2, 1]
         self.global_step = global_step
+        self.compute_normals = compute_normals
         if self.training:
             self.keep_prob = 0.5
         else:
@@ -129,19 +130,38 @@ class AdapNet_pp(network_base.Network):
             self.deconv_up3 = self.tconv2d(self.up2, 8, self.num_classes, 4)
             self.deconv_up3 = self.batch_norm(self.deconv_up3)      
 
-        self.softmax = tf.nn.softmax(self.deconv_up3)
+        if self.compute_normals:
+            self.output = self.deconv_up3
+        else:
+            self.softmax = tf.nn.softmax(self.deconv_up3)
+            self.output = self.softmax
         ## Auxilary
         if self.has_aux_loss:
-            self.aux1 = tf.nn.softmax(tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]]))
-            self.aux2 = tf.nn.softmax(tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]]))
+            self.aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
+            self.aux2 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
+            if not self.compute_normals:
+                self.aux1 = tf.nn.softmax(self.aux1)
+                self.aux2 = tf.nn.softmax(self.aux2)
         
-        
+    def compute_cosine_loss(self, label, prediction):
+        clipped = tf.clip_by_value(prediction, -1.0, 1.0)
+        loss = tf.reduce_mean(tf.losses.cosine_distance(label, clipped, axis=-1))
+        return loss
+
     def _create_loss(self, label):
         self.loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), self.weights), axis=[3]))
         if self.has_aux_loss:
             aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1+1e-10), self.weights), axis=[3]))
             aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2+1e-10), self.weights), axis=[3]))
             self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
+
+    def _create_normal_loss(self, label):
+        self.loss = self.compute_cosine_loss(label, self.deconv_up3)
+        if self.has_aux_loss:
+            aux_loss1 = self.compute_cosine_loss(label, self.aux1)
+            aux_loss2 = self.compute_cosine_loss(label, self.aux2)
+            self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
+
     def create_optimizer(self):
         self.lr = tf.train.polynomial_decay(self.learning_rate, self.global_step,
                                             self.decay_steps, power=self.power)
@@ -156,7 +176,10 @@ class AdapNet_pp(network_base.Network):
     def build_graph(self, data, label=None):
         self._setup(data)
         if self.training:
-            self._create_loss(label)
+            if self.compute_normals:
+                self._create_normal_loss(label)
+            else:
+                self._create_loss(label)
 
 def main():
     print 'Do Nothing'
