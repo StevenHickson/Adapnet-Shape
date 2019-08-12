@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
 import sys
-sys.path.append('/nethome/shickson3/CreateNormals/')
+sys.path.append('/home/steve/git/CreateNormals/')
 from python.calc_normals import NormalCalculation
 
 normal_calculator = None
@@ -49,7 +49,7 @@ def MapLabels(label, name):
     if name == 'scannet':
         label_nyu = np.array([label_nyu_mapping[x] for x in label.flatten()])
         return label_nyu.reshape(label.shape).astype(np.uint16)
-    return label
+    return label.astype(np.uint16)
 
 def CreateScannetMapping():
     global camera_params
@@ -96,7 +96,7 @@ def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_cla
 
 class DatasetHelper:
 
-    def __init__(self, config):
+    def Setup(self, config):
         global output_width
         global output_height
 
@@ -124,7 +124,7 @@ class DatasetHelper:
         if compute_normals:
             normals_decoded = normal_calculator.Calculate(depth_decoded, cv2.resize(label_decoded, depth_decoded.shape, interpolation=cv2.INTER_NEAREST))
         else:
-            normals_decoded = np.zeros_like(depth_decoded).astype(np.float32)
+            normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
         image_decoded = cv2.resize(image_decoded, (self.config['width'],self.config['height']))
         depth_decoded = cv2.resize(depth_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
