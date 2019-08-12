@@ -40,7 +40,8 @@ def train_func(config):
     os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
-    helper = DatasetHelper(config)
+    helper = DatasetHelper()
+    helper.Setup(config)
     data_list, iterator = helper.get_train_data(config)
     resnet_name = 'resnet_v2_50'
     global_step = tf.Variable(0, trainable=False, name='Global_Step')
@@ -60,7 +61,7 @@ def train_func(config):
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
     sess = tf.Session(config=config1)
-    writer = tf.summary.FileWriter('./graphs', sess.graph)
+    writer = tf.summary.FileWriter('./graphs_normals', sess.graph)
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
     total_loss = 0.0

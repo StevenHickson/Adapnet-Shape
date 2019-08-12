@@ -87,10 +87,11 @@ def train_func(config):
     os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
-    helper = DatasetHelper(config)
+    helper = DatasetHelper()
+    helper.Setup(config)
     data_list, iterator = helper.get_train_data(config)
     resnet_name = 'resnet_v2_50'
-    global_step = tf.Variable(0, trainable=False, name='Global_Step')
+    global_step = tf.train.get_or_create_global_step()
     step = 0
 
     with tf.variable_scope(resnet_name):
@@ -140,7 +141,7 @@ def train_func(config):
        
     while 1:
         try:
-            img, label = sess.run([data_list[0], data_list[2]])
+            img, label = sess.run([data_list[0], data_list[3]])
             feed_dict = {images_pl: img, labels_pl: label}
             loss_batch, _, summary, _ = sess.run([model.loss, model.train_op, model.summary_op, mean_update_op],
                                      feed_dict=feed_dict)
