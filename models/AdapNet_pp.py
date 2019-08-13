@@ -144,8 +144,11 @@ class AdapNet_pp(network_base.Network):
                 self.aux2 = tf.nn.softmax(self.aux2)
         
     def compute_cosine_loss(self, label, prediction):
-        clipped = tf.clip_by_value(prediction, -1.0, 1.0)
-        loss = tf.reduce_mean(tf.losses.cosine_distance(label, clipped, axis=-1))
+        pred_norm = tf.nn.l2_normalize(prediction, axis=-1)
+        label_norm = tf.nn.l2_normalize(label, axis=-1)
+        clipped = tf.clip_by_value(pred_norm, -1.0, 1.0)
+        label_clipped = tf.clip_by_value(label_norm, -1.0, 1.0)
+        loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1))
         return loss
 
     def _create_loss(self, label):
