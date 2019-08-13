@@ -23,6 +23,7 @@ import yaml
 from dataset.helper import DatasetHelper
 import matplotlib
 import matplotlib.cm
+import math
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
@@ -31,13 +32,25 @@ def colorize(value):
     value = (value + 1) * 127.5
     return tf.cast(value, tf.uint8)
 
-def add_metric_summaries(images, label, estimate, num_classes):
+def add_metric_summaries(images, label, estimate, config):
+    label_clipped = tf.clip_by_value(tf.nn.l2_normalize(label, axis=-1), -1.0, 1.0)
+    pred_clipped = tf.clip_by_value(tf.nn.l2_normalize(estimate, axis=-1), -1.0, 1.0)
     tf.summary.image('rgb', images)
-    tf.summary.image('label', colorize(label))
-    tf.summary.image('estimate', colorize(estimate))
+    tf.summary.image('label', colorize(label_clipped))
+    tf.summary.image('estimate', colorize(pred_clipped))
+
+    dist = 1 - tf.losses.cosine_distance(label_clipped, pred_clipped, axis=-1, reduction=tf.losses.Reduction.NONE)
+    dist_angle = 180.0 / math.pi * tf.math.acos(dist)
+    #num_samples = float(int(config['width']) * int(config['height']))
+
+    tf.summary.scalar('under_11.25', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 11.25), tf.float32)))
+    tf.summary.scalar('under_22.5', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 22.5), tf.float32)))
+    tf.summary.scalar('under_30', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 30), tf.float32)))
+    tf.summary.scalar('mean_angle', tf.reduce_mean(dist_angle))
+
 
 def train_func(config):
-    os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
+    #os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
     helper = DatasetHelper()
@@ -55,7 +68,7 @@ def train_func(config):
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         model.build_graph(images_pl, labels_pl)
         model.create_optimizer()
-        add_metric_summaries(images_pl, labels_pl, model.output, config['num_classes'])
+        add_metric_summaries(images_pl, labels_pl, model.output, config)
         model._create_summaries()
  
     config1 = tf.ConfigProto()
