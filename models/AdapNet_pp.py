@@ -143,12 +143,15 @@ class AdapNet_pp(network_base.Network):
                 self.aux1 = tf.nn.softmax(self.aux1)
                 self.aux2 = tf.nn.softmax(self.aux2)
         
-    def compute_cosine_loss(self, label, prediction):
+    def compute_cosine_loss(self, label, weights, prediction):
         pred_norm = tf.nn.l2_normalize(prediction, axis=-1)
         label_norm = tf.nn.l2_normalize(label, axis=-1)
         clipped = tf.clip_by_value(pred_norm, -1.0, 1.0)
         label_clipped = tf.clip_by_value(label_norm, -1.0, 1.0)
-        loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1))
+        if weights is None:
+            loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1))
+        else:
+            loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1, weights=weights))
         return loss
 
     def _create_loss(self, label):
@@ -158,11 +161,11 @@ class AdapNet_pp(network_base.Network):
             aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2+1e-10), self.weights), axis=[3]))
             self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
 
-    def _create_normal_loss(self, label):
-        self.loss = self.compute_cosine_loss(label, self.deconv_up3)
+    def _create_normal_loss(self, label, weights):
+        self.loss = self.compute_cosine_loss(label, weights, self.deconv_up3)
         if self.has_aux_loss:
-            aux_loss1 = self.compute_cosine_loss(label, self.aux1)
-            aux_loss2 = self.compute_cosine_loss(label, self.aux2)
+            aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1)
+            aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2)
             self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
 
     def create_optimizer(self):
@@ -176,11 +179,11 @@ class AdapNet_pp(network_base.Network):
             tf.summary.histogram("histogram_loss", self.loss)
             self.summary_op = tf.summary.merge_all()
     
-    def build_graph(self, data, label=None):
+    def build_graph(self, data, label=None, weights=None):
         self._setup(data)
         if self.training:
             if self.compute_normals:
-                self._create_normal_loss(label)
+                self._create_normal_loss(label, weights)
             else:
                 self._create_loss(label)
 
