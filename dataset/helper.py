@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
 import sys
-sys.path.append('/home/steve/git/CreateNormals/')
+sys.path.append('/nethome/shickson3/CreateNormals/')
 from python.calc_normals import NormalCalculation
 
 normal_calculator = None

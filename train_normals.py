@@ -43,11 +43,14 @@ def add_metric_summaries(images, label, estimate, weights, config):
     dist_angle = 180.0 / math.pi * tf.math.acos(dist)
     #num_samples = float(int(config['width']) * int(config['height']))
     parsed_angle = tf.boolean_mask(dist_angle, tf.is_finite(dist_angle))
-
-    tf.summary.scalar('under_11.25', tf.metrics.percentage_below(dist_angle, 11.25, weights=weights))
-    tf.summary.scalar('under_22.5', tf.metrics.percentage_below(dist_angle, 22.55, weights=weights))
-    tf.summary.scalar('under_30', tf.metrics.percentage_below(dist_angle, 30, weights=weights))
+    metric1, update_op1 = tf.metrics.percentage_below(dist_angle, 11.25, weights=weights)
+    metric2, update_op2 = tf.metrics.percentage_below(dist_angle, 22.5, weights=weights)
+    metric3, update_op3 = tf.metrics.percentage_below(dist_angle, 30, weights=weights)
+    tf.summary.scalar('under_11.25', metric1)
+    tf.summary.scalar('under_22.5', metric2)
+    tf.summary.scalar('under_30', metric3)
     tf.summary.scalar('mean_angle', tf.reduce_mean(dist_angle))
+    return [update_op1, update_op2, update_op3]
 
 
 def train_func(config):
@@ -68,17 +71,16 @@ def train_func(config):
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
         normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        weights = tf.boolean_mask(weights, tf.is_finite(weights))
-        weights = tf.cast(tf.math.not_equal(depths_pl, 0), tf.float32)
+        weights = tf.cast(tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0), tf.float32)
         model.build_graph(images_pl, normals_pl, weights)
         model.create_optimizer()
-        add_metric_summaries(images_pl, normals_pl, model.output, weights, config)
+        update_ops = add_metric_summaries(images_pl, normals_pl, model.output, weights, config)
         model._create_summaries()
  
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
     sess = tf.Session(config=config1)
-    writer = tf.summary.FileWriter('./graphs_normals', sess.graph)
+    writer = tf.summary.FileWriter(config['summary_dir'], sess.graph)
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
     total_loss = 0.0
@@ -112,10 +114,13 @@ def train_func(config):
         try:
             img, depth, normals = sess.run([data_list[0], data_list[1], data_list[2]])
             feed_dict = {images_pl: img, depths_pl: depth, normals_pl: normals}
-            loss_batch, _, summary = sess.run([model.loss, model.train_op, model.summary_op],
+            inputs = [model.loss, model.train_op, model.summary_op] + update_ops
+            result = sess.run(inputs,
                                      feed_dict=feed_dict)
+            loss_batch = result[0]
+            summary = result[2]
             if (step + 1) % config['summaries_step'] == 0:
-                writer.add_summary(summary)
+                writer.add_summary(summary, global_step=step)
             total_loss += loss_batch
 
             if (step + 1) % config['save_step'] == 0:
