@@ -16,75 +16,17 @@ import argparse
 import datetime
 import importlib
 import os
-import numpy as np
 import re
 import tensorflow as tf
 import yaml
 from dataset.helper import DatasetHelper
-import matplotlib
-import matplotlib.cm
+from train_utils import *
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
 
-def colorize(value, vmin=None, vmax=None, cmap=None):
-    """
-    A utility function for TensorFlow that maps a grayscale image to a matplotlib
-    colormap for use with TensorBoard image summaries.
-    By default it will normalize the input value to the range 0..1 before mapping
-    to a grayscale colormap
-    Arguments:
-      - value: 2D Tensor of shape [height, width] or 3D Tensor of shape
-        [height, width, 1].
-      - vmin: the minimum value of the range used for normalization.
-        (Default: value minimum)
-      - vmax: the maximum value of the range used for normalization.
-        (Default: value maximum)
-      - cmap: a valid cmap named for use with matplotlib's `get_cmap`.
-        (Default: 'gray')
-    Example usage:
-    ```
-    output = tf.random_uniform(shape=[256, 256, 1])
-    output_color = colorize(output, vmin=0.0, vmax=1.0, cmap='viridis')
-    tf.summary.image('output', output_color)
-    ```
-    
-    Returns a 3D tensor of shape [height, width, 3].
-    """
-
-    # normalize
-    value = tf.cast(value, tf.float32)
-    vmin = tf.reduce_min(value) if vmin is None else vmin
-    vmax = tf.reduce_max(value) if vmax is None else vmax
-    value = (value - vmin) / (vmax - vmin) # vmin..vmax
-
-    # squeeze last dim if it exists
-    value = tf.squeeze(value)
-
-    # quantize
-    indices = tf.to_int32(tf.round(value * 255))
-
-    # gather
-    cm = matplotlib.cm.get_cmap(cmap if cmap is not None else 'gray')
-    colors = cm(np.arange(256))[:, :3]
-    colors = tf.constant(colors, dtype=tf.float32)
-    value = tf.cast(tf.gather(colors, indices) * 255, tf.uint8)
-
-    return value
-
-def add_metric_summaries(images, label, estimate, num_classes):
-    labels_argmax = tf.math.argmax(label, axis=-1)
-    estimate_argmax = tf.math.argmax(estimate, axis=-1)
-    tf.summary.image('rgb', images)
-    tf.summary.image('label', colorize(labels_argmax, cmap='jet', vmin=0, vmax=num_classes))
-    tf.summary.image('estimate',  colorize(estimate_argmax, cmap='jet', vmin=0, vmax=num_classes))
-    mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels_argmax, predictions=estimate_argmax, num_classes=num_classes)
-    tf.summary.scalar('m_iou', mean_iou)
-    return mean_update_op
-
-
 def train_func(config):
-    os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
+    #os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
     helper = DatasetHelper()
@@ -103,7 +45,10 @@ def train_func(config):
                                                 config['num_classes']])
         model.build_graph(images_pl, labels_pl)
         model.create_optimizer()
-        mean_update_op = add_metric_summaries(images_pl, labels_pl, model.softmax, config['num_classes'])
+        labels_argmax = extract_labels(labels_pl)
+        estimate_argmax = extract_labels(model.softmax)
+        add_image_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax)
+        update_ops = add_metric_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax, num_classes=config['num_classes'])
         model._create_summaries()
  
     config1 = tf.ConfigProto()
@@ -143,10 +88,12 @@ def train_func(config):
         try:
             img, label = sess.run([data_list[0], data_list[3]])
             feed_dict = {images_pl: img, labels_pl: label}
-            loss_batch, _, summary, _ = sess.run([model.loss, model.train_op, model.summary_op, mean_update_op],
-                                     feed_dict=feed_dict)
+            inputs = [model.loss, model.train_op, model.summary_op] + update_ops
+            result = sess.run(inputs, feed_dict=feed_dict)
+            loss_batch = result[0]
+            summary = result[2]
             if (step + 1) % config['summaries_step'] == 0:
-                writer.add_summary(summary)
+                writer.add_summary(summary, global_step=step)
             total_loss += loss_batch
 
             if (step + 1) % config['save_step'] == 0:

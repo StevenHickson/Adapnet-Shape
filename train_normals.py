@@ -21,36 +21,11 @@ import re
 import tensorflow as tf
 import yaml
 from dataset.helper import DatasetHelper
-import matplotlib
-import matplotlib.cm
 import math
+from train_utils import *
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
-
-def colorize(value):
-    value = (value + 1) * 127.5
-    return tf.cast(value, tf.uint8)
-
-def add_metric_summaries(images, label, estimate, weights, config):
-    label_clipped = tf.clip_by_value(tf.nn.l2_normalize(label, axis=-1), -1.0, 1.0)
-    pred_clipped = tf.clip_by_value(tf.nn.l2_normalize(estimate, axis=-1), -1.0, 1.0)
-    tf.summary.image('rgb', images)
-    tf.summary.image('label', colorize(label_clipped))
-    tf.summary.image('estimate', colorize(pred_clipped))
-
-    dist = 1 - tf.losses.cosine_distance(label_clipped, pred_clipped, axis=-1, weights=weights, reduction=tf.losses.Reduction.NONE)
-    dist_angle = 180.0 / math.pi * tf.math.acos(dist)
-    #num_samples = float(int(config['width']) * int(config['height']))
-    parsed_angle = tf.boolean_mask(dist_angle, tf.is_finite(dist_angle))
-    metric1, update_op1 = tf.metrics.percentage_below(dist_angle, 11.25, weights=weights)
-    metric2, update_op2 = tf.metrics.percentage_below(dist_angle, 22.5, weights=weights)
-    metric3, update_op3 = tf.metrics.percentage_below(dist_angle, 30, weights=weights)
-    tf.summary.scalar('under_11.25', metric1)
-    tf.summary.scalar('under_22.5', metric2)
-    tf.summary.scalar('under_30', metric3)
-    tf.summary.scalar('mean_angle', tf.reduce_mean(dist_angle))
-    return [update_op1, update_op2, update_op3]
 
 
 def train_func(config):
@@ -74,7 +49,10 @@ def train_func(config):
         weights = tf.cast(tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0), tf.float32)
         model.build_graph(images_pl, normals_pl, weights)
         model.create_optimizer()
-        update_ops = add_metric_summaries(images_pl, normals_pl, model.output, weights, config)
+        label = extract_normals(normals_pl)
+        pred = extract_normals(model_output)
+        add_image_summaries(images=images_pl, normals=label, normals_estimate=pred)
+        update_ops = add_metric_summaries(images=images_pl, normals=label, normals_estimate=pred, depth_weights=weights, config=config)
         model._create_summaries()
  
     config1 = tf.ConfigProto()
@@ -115,8 +93,7 @@ def train_func(config):
             img, depth, normals = sess.run([data_list[0], data_list[1], data_list[2]])
             feed_dict = {images_pl: img, depths_pl: depth, normals_pl: normals}
             inputs = [model.loss, model.train_op, model.summary_op] + update_ops
-            result = sess.run(inputs,
-                                     feed_dict=feed_dict)
+            result = sess.run(inputs, feed_dict=feed_dict)
             loss_batch = result[0]
             summary = result[2]
             if (step + 1) % config['summaries_step'] == 0:
