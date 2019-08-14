@@ -32,20 +32,21 @@ def colorize(value):
     value = (value + 1) * 127.5
     return tf.cast(value, tf.uint8)
 
-def add_metric_summaries(images, label, estimate, config):
+def add_metric_summaries(images, label, estimate, weights, config):
     label_clipped = tf.clip_by_value(tf.nn.l2_normalize(label, axis=-1), -1.0, 1.0)
     pred_clipped = tf.clip_by_value(tf.nn.l2_normalize(estimate, axis=-1), -1.0, 1.0)
     tf.summary.image('rgb', images)
     tf.summary.image('label', colorize(label_clipped))
     tf.summary.image('estimate', colorize(pred_clipped))
 
-    dist = 1 - tf.losses.cosine_distance(label_clipped, pred_clipped, axis=-1, reduction=tf.losses.Reduction.NONE)
+    dist = 1 - tf.losses.cosine_distance(label_clipped, pred_clipped, axis=-1, weights=weights, reduction=tf.losses.Reduction.NONE)
     dist_angle = 180.0 / math.pi * tf.math.acos(dist)
     #num_samples = float(int(config['width']) * int(config['height']))
+    parsed_angle = tf.boolean_mask(dist_angle, tf.is_finite(dist_angle))
 
-    tf.summary.scalar('under_11.25', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 11.25), tf.float32)))
-    tf.summary.scalar('under_22.5', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 22.5), tf.float32)))
-    tf.summary.scalar('under_30', tf.reduce_mean(tf.cast(tf.less_equal(dist_angle, 30), tf.float32)))
+    tf.summary.scalar('under_11.25', tf.metrics.percentage_below(dist_angle, 11.25, weights=weights))
+    tf.summary.scalar('under_22.5', tf.metrics.percentage_below(dist_angle, 22.55, weights=weights))
+    tf.summary.scalar('under_30', tf.metrics.percentage_below(dist_angle, 30, weights=weights))
     tf.summary.scalar('mean_angle', tf.reduce_mean(dist_angle))
 
 
@@ -65,10 +66,13 @@ def train_func(config):
                            decay_steps=config['max_iteration'], power=config['power'],
                            global_step=global_step, compute_normals=True)
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        model.build_graph(images_pl, labels_pl)
+        depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
+        normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
+        weights = tf.boolean_mask(weights, tf.is_finite(weights))
+        weights = tf.cast(tf.math.not_equal(depths_pl, 0), tf.float32)
+        model.build_graph(images_pl, normals_pl, weights)
         model.create_optimizer()
-        add_metric_summaries(images_pl, labels_pl, model.output, config)
+        add_metric_summaries(images_pl, normals_pl, model.output, weights, config)
         model._create_summaries()
  
     config1 = tf.ConfigProto()
@@ -106,8 +110,8 @@ def train_func(config):
        
     while 1:
         try:
-            img, label = sess.run([data_list[0], data_list[2]])
-            feed_dict = {images_pl: img, labels_pl: label}
+            img, depth, normals = sess.run([data_list[0], data_list[1], data_list[2]])
+            feed_dict = {images_pl: img, depths_pl: depth, normals_pl: normals}
             loss_batch, _, summary = sess.run([model.loss, model.train_op, model.summary_op],
                                      feed_dict=feed_dict)
             if (step + 1) % config['summaries_step'] == 0:
