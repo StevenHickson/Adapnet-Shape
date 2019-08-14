@@ -1,0 +1,13 @@
+# Undo/temp files
+*.un~
+nohup.out
+
+# Checkpoints/graphs
+graphs*/
+checkpoints*/
+
+# Py object files
+*.pyc
+
+# ipython checkpoints
+.ipynb_checkpoints/
