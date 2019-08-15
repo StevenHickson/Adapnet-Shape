@@ -50,7 +50,7 @@ def train_func(config):
         model.build_graph(images_pl, normals_pl, weights)
         model.create_optimizer()
         label = extract_normals(normals_pl)
-        pred = extract_normals(model_output)
+        pred = extract_normals(model.output)
         add_image_summaries(images=images_pl, normals=label, normals_estimate=pred)
         update_ops = add_metric_summaries(images=images_pl, normals=label, normals_estimate=pred, depth_weights=weights, config=config)
         model._create_summaries()

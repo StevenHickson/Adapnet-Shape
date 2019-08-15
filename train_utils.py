@@ -2,11 +2,12 @@ import matplotlib
 import matplotlib.cm
 import numpy as np
 import tensorflow as tf
+import math
 
-def extract_labels(labels)
+def extract_labels(labels):
     return tf.math.argmax(labels, axis=-1)
 
-def extract_normals(normals)
+def extract_normals(normals):
     return  tf.clip_by_value(tf.nn.l2_normalize(normals, axis=-1), -1.0, 1.0)
 
 def colorize(value, vmin=None, vmax=None, cmap=None):
@@ -59,12 +60,12 @@ def colorize_normals(value):
     return tf.cast(value, tf.uint8)
 
 def add_metric_summaries(images=None,
-                        image_estimate=None,
+                        images_estimate=None,
                         depth=None,
                         depth_estimate=None,
                         normals=None,
                         normals_estimate=None,
-                        depth_weights=None
+                        depth_weights=None,
                         labels=None,
                         labels_estimate=None,
                         config=None):
@@ -80,16 +81,16 @@ def add_metric_summaries(images=None,
         tf.summary.scalar('under_11.25', metric1)
         tf.summary.scalar('under_22.5', metric2)
         tf.summary.scalar('under_30', metric3)
-        tf.summary.scalar('mean_angle', tf.reduce_mean(dist_angle))
+        tf.summary.scalar('mean_angle', tf.reduce_mean(parsed_angle))
         update_ops += [update_op1, update_op2, update_op3]
     if labels_estimate is not None:
-        mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels, predictions=labels_estimate, num_classes=num_classes)
+        mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels, predictions=labels_estimate, num_classes=config['num_classes'])
         tf.summary.scalar('m_iou', mean_iou)
-        update_ops += mean_update_op
+        update_ops += [mean_update_op]
     return update_ops
 
 def add_image_summaries(images=None,
-                        image_estimate=None,
+                        images_estimate=None,
                         depth=None,
                         depth_estimate=None,
                         normals=None,
