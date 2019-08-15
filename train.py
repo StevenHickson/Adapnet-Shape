@@ -50,7 +50,7 @@ def setup_model(model, config):
         labels_argmax = extract_labels(labels_pl)
         estimate_argmax = extract_labels(model.softmax)
         add_image_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax)
-        update_ops = add_metric_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax, num_classes=config['num_classes'])
+        update_ops = add_metric_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax, config=config)
     elif config['output_modality'] == 'normals':
         label = extract_normals(labels_pl)
         pred = extract_normals(model_output)
@@ -58,7 +58,21 @@ def setup_model(model, config):
         update_ops = add_metric_summaries(images=images_pl, normals=label, normals_estimate=pred, depth_weights=weights, config=config)
     
     model._create_summaries()
-    return image_pl, depths_pl, labels_pl, update_ops
+    return images_pl, depths_pl, labels_pl, update_ops
+
+def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
+    reader = tf.train.NewCheckpointReader(save_file)
+    saved_shapes = reader.get_variable_to_shape_map()
+    var_names = sorted([(var.name, var.name.split(':')[0]) for var in tf.global_variables()
+            if var.name.split(':')[0] in saved_shapes])
+    restore_vars = []
+    for var_name, saved_var_name in var_names:
+        curr_var = graph.get_tensor_by_name(var_name)
+        var_shape = curr_var.get_shape().as_list()
+        if var_shape == saved_shapes[saved_var_name]:
+            restore_vars.append(curr_var)
+    saver = tf.train.Saver(restore_vars, reshape=True)
+    saver.restore(session, save_file)
 
 def train_func(config):
     #os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
@@ -76,7 +90,7 @@ def train_func(config):
         model = model_func(num_classes=config['num_classes'], learning_rate=config['learning_rate'],
                            decay_steps=config['max_iteration'], power=config['power'],
                            global_step=global_step, compute_normals=compute_normals)
-        image_pl, depths_pl, labels_pl, update_ops = setup_model(model, config)
+        images_pl, depths_pl, labels_pl, update_ops = setup_model(model, config)
  
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
@@ -97,17 +111,27 @@ def train_func(config):
 
     else:
         if 'intialize' in config:
-            reader = tf.train.NewCheckpointReader(config['intialize'])
-            var_str = reader.debug_string()
-            name_var = re.findall('[A-Za-z0-9/:_]+ ', var_str)
-            import_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-            initialize_variables = {} 
-            for var in import_variables: 
-                if var.name+' ' in  name_var:
-                    initialize_variables[var.name] = var
+            #reader = tf.train.NewCheckpointReader(config['intialize'])
+            #var_str = reader.debug_string()
+            #name_var = re.findall('[A-Za-z0-9/:_]+ ', var_str)
+            #print('Name var: ')
+            #for var in name_var:
+            #    print(var)
+            #import_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+            #print('Import variables: ')
+            #initialize_variables = {} 
+            #for var in import_variables:
+            #    print(var.name)
+            #    if var.name[-2:] == ':0':
+            #        var_name = var.name[:-2]
+            #    else:
+            #        var_name = var.name
+            #    if var_name+' ' in  name_var:
+            #        initialize_variables[var_name] = var
 
-            saver = tf.train.Saver(initialize_variables)
-            saver.restore(save_path=config['intialize'], sess=sess)
+            #saver = tf.train.Saver(initialize_variables, reshape=True)
+            #saver.restore(save_path=config['intialize'], sess=sess)
+            optimistic_restore(sess, config['intialize'])
             print 'Pretrained Intialization'
         saver = tf.train.Saver(max_to_keep=1000)
        
