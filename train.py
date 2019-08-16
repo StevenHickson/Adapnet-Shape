@@ -34,6 +34,7 @@ def setup_model(model, config):
     images=None
     images_estimate=None
     depth=None
+    depths_pl=None
     depth_estimate=None
     normals=None
     normals_estimate=None
@@ -56,18 +57,20 @@ def setup_model(model, config):
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
                                                 config['num_classes']])
         labels = extract_labels(labels_pl)
-        labels_estimate = extract_labels(model.softmax)
     elif config['output_modality'] == 'normals':
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
         depth = depths_pl
         normals = extract_normals(labels_pl)
-        normals_estimate = extract_normals(model.output)
         weights = calculate_weights(depth, normals)
     
     model.build_graph(images_pl, labels_pl, weights)
     model.create_optimizer()
     
+    if config['output_modality'] == 'labels':
+        labels_estimate = extract_labels(model.softmax)
+    elif config['output_modality'] == 'normals':
+        normals_estimate = extract_normals(model.output)
   
     add_image_summaries(images=images,
                         images_estimate=images_estimate,
@@ -91,6 +94,19 @@ def setup_model(model, config):
 
     model._create_summaries()
     return images_pl, depths_pl, labels_pl, update_ops
+
+def original_restore(sess, save_file):
+    reader = tf.train.NewCheckpointReader(save_file)
+    var_str = reader.debug_string()
+    name_var = re.findall('[A-Za-z0-9/:_]+ ', var_str)
+    import_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+    initialize_variables = {} 
+    for var in import_variables:
+        if var.name+' ' in  name_var:
+            initialize_variables[var.name] = var
+
+    saver = tf.train.Saver(initialize_variables, reshape=True)
+    saver.restore(save_path=save_file, sess=sess)
 
 def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
     reader = tf.train.NewCheckpointReader(save_file)
@@ -142,9 +158,12 @@ def train_func(config):
         print 'Model Loaded'
 
     else:
-        if 'intialize' in config:
+        if 'orig_intialize' in config:
+            original_restore(sess, config['orig_intialize'])
+            print 'Original Pretrained Intialization'
+        elif 'intialize' in config:
             optimistic_restore(sess, config['intialize'])
-            print 'Pretrained Intialization'
+            print 'Optimistic Pretrained Intialization'
         saver = tf.train.Saver(max_to_keep=1000)
        
     while 1:
