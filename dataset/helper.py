@@ -108,7 +108,7 @@ class DatasetHelper:
 	    CreateScannetMapping()
 	elif self.name == 'scenenet':
 	    CreateScenenetMapping(config['num_classes'])
-        if self.config['output_modality'] == 'normals':
+        if self.config['output_modality'] == 'normals' or self.config['input_modality'] == 'normals':
             SetUpNormalCalculation()
 
     def read_raw_images(self, image_file, depth_file, label_file, num_classes):
@@ -134,7 +134,7 @@ class DatasetHelper:
 
     def get_train_batch(self, config):
         filenames = config['train_data']
-        compute_normals = (self.config['output_modality'] == 'normals')
+        compute_normals = (self.config['output_modality'] == 'normals' or self.config['input_modality'] == 'normals')
         image_files = []
         depth_files = []
         label_files = []
