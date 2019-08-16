@@ -25,38 +25,70 @@ from train_utils import *
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
 
+def calculate_weights(depths, normals):
+    valid_depths = tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0)
+    valid_normals = tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0)
+    return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
+
 def setup_model(model, config):
+    images=None
+    images_estimate=None
+    depth=None
+    depth_estimate=None
+    normals=None
+    normals_estimate=None
+    labels=None
+    labels_estimate=None
+    weights = None
+
     if config['input_modality'] == 'rgb':
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
+        images=images_pl
     elif config['input_modality'] == 'normals':
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
+        normals = extract_normals(images_pl)
     elif config['input_modality'] == 'depth':
         images_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
         images_pl = tf.cast(images_pl, tf.float32)
+        depth = images_pl
+    
     if config['output_modality'] == 'labels':
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
                                                 config['num_classes']])
-        depths_pl = None
-        weights = None
+        labels = extract_labels(labels_pl)
+        labels_estimate = extract_labels(model.softmax)
     elif config['output_modality'] == 'normals':
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
-        weights = tf.cast(tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0), tf.float32)
+        depth = depths_pl
+        normals = extract_normals(labels_pl)
+        normals_estimate = extract_normals(model.output)
+        weights = calculate_weights(depth, normals)
     
     model.build_graph(images_pl, labels_pl, weights)
     model.create_optimizer()
     
-    if config['output_modality'] == 'labels':
-        labels_argmax = extract_labels(labels_pl)
-        estimate_argmax = extract_labels(model.softmax)
-        add_image_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax)
-        update_ops = add_metric_summaries(images=images_pl, labels=labels_argmax, labels_estimate=estimate_argmax, config=config)
-    elif config['output_modality'] == 'normals':
-        label = extract_normals(labels_pl)
-        pred = extract_normals(model_output)
-        add_image_summaries(images=images_pl, normals=label, normals_estimate=pred)
-        update_ops = add_metric_summaries(images=images_pl, normals=label, normals_estimate=pred, depth_weights=weights, config=config)
-    
+  
+    add_image_summaries(images=images,
+                        images_estimate=images_estimate,
+                        depth=depth,
+                        depth_estimate=depth_estimate,
+                        normals=normals,
+                        normals_estimate=normals_estimate,
+                        labels=labels,
+                        labels_estimate=labels_estimate,
+                        num_classes=config['num_classes'])
+    update_ops = add_metric_summaries(images=images,
+                                      images_estimate=images_estimate,
+                                      depth=depth,
+                                      depth_estimate=depth_estimate,
+                                      normals=normals,
+                                      normals_estimate=normals_estimate,
+                                      depth_weights=weights,
+                                      labels=labels,
+                                      labels_estimate=labels_estimate,
+                                      config=config)
+
     model._create_summaries()
     return images_pl, depths_pl, labels_pl, update_ops
 
@@ -111,26 +143,6 @@ def train_func(config):
 
     else:
         if 'intialize' in config:
-            #reader = tf.train.NewCheckpointReader(config['intialize'])
-            #var_str = reader.debug_string()
-            #name_var = re.findall('[A-Za-z0-9/:_]+ ', var_str)
-            #print('Name var: ')
-            #for var in name_var:
-            #    print(var)
-            #import_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-            #print('Import variables: ')
-            #initialize_variables = {} 
-            #for var in import_variables:
-            #    print(var.name)
-            #    if var.name[-2:] == ':0':
-            #        var_name = var.name[:-2]
-            #    else:
-            #        var_name = var.name
-            #    if var_name+' ' in  name_var:
-            #        initialize_variables[var_name] = var
-
-            #saver = tf.train.Saver(initialize_variables, reshape=True)
-            #saver.restore(save_path=config['intialize'], sess=sess)
             optimistic_restore(sess, config['intialize'])
             print 'Pretrained Intialization'
         saver = tf.train.Saver(max_to_keep=1000)
