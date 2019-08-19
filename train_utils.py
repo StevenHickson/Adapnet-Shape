@@ -106,6 +106,10 @@ def add_image_summaries(images=None,
         tf.summary.image('normals', colorize_normals(normals))
     if normals_estimate is not None:
         tf.summary.image('normals_estimate', colorize_normals(normals_estimate))
+    if depth is not None:
+        tf.summary.image('depth', colorize(depth, cmap='jet'))
+    if depth_estimate is not None:
+        tf.summary.image('depth_estimate', colorize(depth_estimate, cmap='jet'))
     if labels is not None:
         tf.summary.image('label', colorize(labels, cmap='jet', vmin=0, vmax=num_classes))
     if labels_estimate is not None:

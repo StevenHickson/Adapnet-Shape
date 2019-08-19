@@ -45,13 +45,15 @@ def setup_model(model, config):
     if config['input_modality'] == 'rgb':
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         images=images_pl
+        model_input = images_pl
     elif config['input_modality'] == 'normals':
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         normals = extract_normals(images_pl)
+        model_input = images_pl
     elif config['input_modality'] == 'depth':
         images_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
-        images_pl = tf.cast(images_pl, tf.float32)
-        depth = images_pl
+        depth = tf.cast(images_pl, tf.float32)
+        model_input = tf.tile(depth, [1,1,1,3])
     
     if config['output_modality'] == 'labels':
         labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
@@ -64,7 +66,7 @@ def setup_model(model, config):
         normals = extract_normals(labels_pl)
         weights = calculate_weights(depth, normals)
     
-    model.build_graph(images_pl, labels_pl, weights)
+    model.build_graph(model_input, labels_pl, weights)
     model.create_optimizer()
     
     if config['output_modality'] == 'labels':
