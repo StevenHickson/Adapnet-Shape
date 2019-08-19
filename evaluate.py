@@ -25,7 +25,6 @@ PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_test.config')
 
 def test_func(config):
-    os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.' + config['model'])
     model_func = getattr(module, config['model'])
     data_list, iterator = get_test_data(config)
@@ -50,7 +49,7 @@ def test_func(config):
     output_matrix = np.zeros([config['num_classes'], 3])
     while 1:
         try:
-            img, label = sess.run([data_list[0], data_list[1]])
+            img, label = sess.run([data_list[0], data_list[3]])
             feed_dict = {images_pl : img}
             probabilities = sess.run([model.softmax], feed_dict=feed_dict)
             prediction = np.argmax(probabilities[0], 3)
