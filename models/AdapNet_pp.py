@@ -15,12 +15,12 @@
 import tensorflow as tf
 import network_base
 class AdapNet_pp(network_base.Network):
-    def __init__(self, num_classes=12, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
+    def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
                  has_aux_loss=True, compute_normals=False):
         
         super(AdapNet_pp, self).__init__()
-        self.num_classes = num_classes
+        self.num_classes = modalities_num_classes.values()[0]
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
@@ -131,10 +131,10 @@ class AdapNet_pp(network_base.Network):
             self.deconv_up3 = self.batch_norm(self.deconv_up3)      
 
         if self.compute_normals:
-            self.output = self.deconv_up3
+            self.output_normals = self.deconv_up3
         else:
             self.softmax = tf.nn.softmax(self.deconv_up3)
-            self.output = self.softmax
+            self.output_labels = self.softmax
         ## Auxilary
         if self.has_aux_loss:
             self.aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
@@ -179,11 +179,11 @@ class AdapNet_pp(network_base.Network):
             tf.summary.histogram("histogram_loss", self.loss)
             self.summary_op = tf.summary.merge_all()
     
-    def build_graph(self, data, label=None, weights=None):
+    def build_graph(self, data, depth=None, label=None, normals=None, valid_depths=None):
         self._setup(data)
         if self.training:
             if self.compute_normals:
-                self._create_normal_loss(label, weights)
+                self._create_normal_loss(normals, valid_depths)
             else:
                 self._create_loss(label)
 
