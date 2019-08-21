@@ -19,7 +19,7 @@ import os
 import numpy as np
 import tensorflow as tf
 import yaml
-from dataset.helper import *
+from dataset.helper import DatasetHelper, compute_output_matrix, compute_iou
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_test.config')
@@ -27,7 +27,9 @@ PARSER.add_argument('-c', '--config', default='config/cityscapes_test.config')
 def test_func(config):
     module = importlib.import_module('models.' + config['model'])
     model_func = getattr(module, config['model'])
-    data_list, iterator = get_test_data(config)
+    helper = DatasetHelper()
+    helper.Setup(config)
+    data_list, iterator = helper.get_test_data(config, config['num_classes'])
     resnet_name = 'resnet_v2_50'
 
     with tf.variable_scope(resnet_name):
@@ -43,7 +45,7 @@ def test_func(config):
     print 'total_variables_loaded:', len(import_variables)
     saver = tf.train.Saver(import_variables)
     saver.restore(sess, config['checkpoint'])
-    sess.run(iterator.initializer)
+    #sess.run(iterator.initializer)
     step = 0
     total_num = 0
     output_matrix = np.zeros([config['num_classes'], 3])
