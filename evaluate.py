@@ -20,6 +20,7 @@ import numpy as np
 import tensorflow as tf
 import yaml
 from dataset.helper import DatasetHelper, compute_output_matrix, compute_iou
+from train_utils import *
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_test.config')
@@ -29,13 +30,13 @@ def test_func(config):
     model_func = getattr(module, config['model'])
     helper = DatasetHelper()
     helper.Setup(config)
-    data_list, iterator = helper.get_test_data(config, config['num_classes'])
+    modalities_num_classes, num_label_classes = extract_modalities(config)
+    data_list, iterator = helper.get_test_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
 
     with tf.variable_scope(resnet_name):
-        model = model_func(num_classes=config['num_classes'], training=False)
-        images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        model.build_graph(images_pl)
+        model = model_func(modalities_num_classes=modalities_num_classes, training=False)
+        images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config, train=False)
 
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
@@ -48,13 +49,13 @@ def test_func(config):
     #sess.run(iterator.initializer)
     step = 0
     total_num = 0
-    output_matrix = np.zeros([config['num_classes'], 3])
+    output_matrix = np.zeros([num_label_classes, 3])
     while 1:
         try:
-            img, label = sess.run([data_list[0], data_list[3]])
-            feed_dict = {images_pl : img}
+            feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
             probabilities = sess.run([model.softmax], feed_dict=feed_dict)
             prediction = np.argmax(probabilities[0], 3)
+            label = feed_dict[labels_pl]
             gt = np.argmax(label, 3)
             prediction[gt == 0] = 0
             output_matrix = compute_output_matrix(gt, prediction, output_matrix)
