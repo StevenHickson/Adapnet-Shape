@@ -68,7 +68,7 @@ def add_metric_summaries(images=None,
                         depth_weights=None,
                         labels=None,
                         labels_estimate=None,
-                        config=None):
+                        num_label_classes=None):
     update_ops = []
     if normals_estimate is not None:
         dist = 1 - tf.losses.cosine_distance(normals, normals_estimate, axis=-1, weights=depth_weights, reduction=tf.losses.Reduction.NONE)
@@ -84,7 +84,7 @@ def add_metric_summaries(images=None,
         tf.summary.scalar('mean_angle', tf.reduce_mean(parsed_angle))
         update_ops += [update_op1, update_op2, update_op3]
     if labels_estimate is not None:
-        mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels, predictions=labels_estimate, num_classes=config['num_classes'])
+        mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels, predictions=labels_estimate, num_classes=num_label_classes)
         tf.summary.scalar('m_iou', mean_iou)
         update_ops += [mean_update_op]
     return update_ops
@@ -97,7 +97,7 @@ def add_image_summaries(images=None,
                         normals_estimate=None,
                         labels=None,
                         labels_estimate=None,
-                        num_classes=None):
+                        num_label_classes=None):
     if images is not None:
         tf.summary.image('rgb', images)
     if images_estimate is not None:
@@ -111,6 +111,6 @@ def add_image_summaries(images=None,
     if depth_estimate is not None:
         tf.summary.image('depth_estimate', colorize(depth_estimate, cmap='jet'))
     if labels is not None:
-        tf.summary.image('label', colorize(labels, cmap='jet', vmin=0, vmax=num_classes))
+        tf.summary.image('label', colorize(labels, cmap='jet', vmin=0, vmax=num_label_classes))
     if labels_estimate is not None:
-        tf.summary.image('labels_estimate',  colorize(labels_estimate, cmap='jet', vmin=0, vmax=num_classes))
+        tf.summary.image('labels_estimate',  colorize(labels_estimate, cmap='jet', vmin=0, vmax=num_label_classes))

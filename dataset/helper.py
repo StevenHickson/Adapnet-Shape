@@ -67,14 +67,14 @@ def SetUpNormalCalculation():
     global normal_calculator
     normal_calculator = NormalCalculation(camera_params, normal_params, flat_labels)
     
-def CreateScenenetMapping(num_classes):
+def CreateScenenetMapping():
     global camera_params
     global normal_params
     global label_nyu_mapping
 
     camera_params = [277.128129211,0,160,0,289.705627485,120,0,0,1]
     normal_params = [5,0.02,10]
-    for i in range(0, num_classes):
+    for i in range(0, 15):
         label_nyu_mapping[i] = i
 
 def MapLabels(label, name):
@@ -103,7 +103,7 @@ def CreateScannetMapping():
                 label_nyu_mapping[int(row[0])] = convert_to_20[int(row[4])]
             start = False
 
-def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_classes):
+def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_label_classes):
     image_decoded.set_shape([None, None, None])
     depth_decoded.set_shape([None, None, None])
     normals_decoded.set_shape([None, None, None])
@@ -119,7 +119,7 @@ def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_cla
     normals = tf.reshape(normals, [output_height, output_width, 3])
     depth = tf.reshape(depth, [output_height, output_width, 1])
     label = tf.reshape(label, [output_height, output_width, 1])
-    label = tf.one_hot(label, num_classes)
+    label = tf.one_hot(label, num_label_classes)
     label = tf.squeeze(label, axis=2)
     modality1 = tf.cast(tf.reshape(image_decoded, [output_height, output_width, 3]), tf.float32)
     modality1 = (modality1 - 127.5) / 2.0
@@ -139,17 +139,17 @@ class DatasetHelper:
         if self.name == 'scannet':
 	    CreateScannetMapping()
 	elif self.name == 'scenenet':
-	    CreateScenenetMapping(config['num_classes'])
-        if self.config['output_modality'] == 'normals' or self.config['input_modality'] == 'normals':
+	    CreateScenenetMapping()
+        if 'normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals':
             SetUpNormalCalculation()
 
-    def read_raw_images(self, image_file, depth_file, label_file, num_classes):
+    def read_raw_images(self, image_file, depth_file, label_file, num_label_classes):
         image_decoded = tf.io.read_file(image_file)
         depth_decoded = tf.io.read_file(depth_file)
         label_decoded = tf.io.read_file(label_file)
         return image_decoded, depth_decoded, label_decoded
 
-    def _read_images_function(self, image_file, depth_file, label_file, num_classes, dataset_name, compute_normals):
+    def _read_images_function(self, image_file, depth_file, label_file, num_label_classes, dataset_name, compute_normals):
         image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
         depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
         label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
@@ -162,11 +162,11 @@ class DatasetHelper:
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         normals_decoded = cv2.resize(normals_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = MapLabels(label_decoded, dataset_name)
-        return image_decoded, depth_decoded, normals_decoded, label_decoded, num_classes
+        return image_decoded, depth_decoded, normals_decoded, label_decoded, num_label_classes
 
-    def get_batch(self, split, config):
+    def get_batch(self, split, config, num_label_classes):
         filenames = config[split]
-        compute_normals = (self.config['output_modality'] == 'normals' or self.config['input_modality'] == 'normals')
+        compute_normals = ('normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals')
         image_files = []
         depth_files = []
         label_files = []
@@ -178,10 +178,10 @@ class DatasetHelper:
                 label_files.append(splits[2])
 
         dataset = tf.data.Dataset.from_tensor_slices((image_files, depth_files, label_files))
-        #dataset = dataset.map(lambda image_file, depth_file, label_file: read_raw_images(image_file, depth_file, label_file, config['num_classes']))
+        #dataset = dataset.map(lambda image_file, depth_file, label_file: read_raw_images(image_file, depth_file, label_file, config['num_label_classes']))
         dataset = dataset.map(
         lambda image_file, depth_file, label_file: tuple(tf.py_func(
-            self._read_images_function, [image_file, depth_file, label_file, config['num_classes'], self.name, compute_normals], [tf.uint8, tf.uint16, tf.float32, tf.uint16, tf.int32])))
+            self._read_images_function, [image_file, depth_file, label_file, num_label_classes, self.name, compute_normals], [tf.uint8, tf.uint16, tf.float32, tf.uint16, tf.int32])))
         dataset = dataset.map(parser)
         dataset = dataset.shuffle(buffer_size=100)
         dataset = dataset.batch(config['batch_size'])
@@ -190,13 +190,13 @@ class DatasetHelper:
         iterator = dataset.make_one_shot_iterator()
         return iterator
 
-    def get_train_data(self, config):
-        iterator = self.get_batch('train_data', config)
+    def get_train_data(self, config, num_label_classes):
+        iterator = self.get_batch('train_data', config, num_label_classes)
         rgb, depth, normals, label = iterator.get_next()
         return [rgb, depth, normals, label], iterator
 
-    def get_test_data(self, config):
-        iterator = self.get_batch('test_data', config)
+    def get_test_data(self, config, num_label_classes):
+        iterator = self.get_batch('test_data', config, num_label_classes)
         rgb, depth, normals, label = iterator.get_next()
         return [rgb, depth, normals, label], iterator
 

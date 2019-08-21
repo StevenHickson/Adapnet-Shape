@@ -26,8 +26,8 @@ PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
 
 def calculate_weights(depths, normals):
-    valid_depths = tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0)
-    valid_normals = tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0)
+    valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
+    valid_normals = tf.expand_dims(tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0), axis=-1)
     return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
 
 def setup_model(model, config):
@@ -44,6 +44,7 @@ def setup_model(model, config):
     labels=None
     labels_estimate=None
     weights = None
+    num_label_classes = None
 
     if config['input_modality'] == 'rgb':
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
@@ -58,26 +59,27 @@ def setup_model(model, config):
         depth = tf.cast(depths_pl, tf.float32)
         model_input = tf.tile(depth, [1,1,1,3])
     
-    if config['output_modality'] == 'labels':
-        labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
-                                                config['num_classes']])
-        model_output = labels_pl
-        labels = extract_labels(labels_pl)
-    elif config['output_modality'] == 'normals':
-        normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
-        model_output = normals_pl
-        depth = depths_pl
-        normals = extract_normals(normals_pl)
-        weights = calculate_weights(depth, normals)
+    for modality, num_classes in zip(config['output_modality'], config['num_classes']):
+        if modality == 'labels':
+            labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
+                                                num_classes])
+            labels = extract_labels(labels_pl)
+            num_label_classes = num_classes
+        elif modality == 'normals':
+            normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
+            depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
+            depth = depths_pl
+            normals = extract_normals(normals_pl)
+            weights = calculate_weights(depth, normals)
     
-    model.build_graph(model_input, model_output, weights)
+    model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     model.create_optimizer()
     
-    if config['output_modality'] == 'labels':
-        labels_estimate = extract_labels(model.softmax)
-    elif config['output_modality'] == 'normals':
-        normals_estimate = extract_normals(model.output)
+    for modality in config['output_modality']:
+        if modality == 'labels':
+            labels_estimate = extract_labels(model.output_labels)
+        elif modality == 'normals':
+            normals_estimate = extract_normals(model.output_normals)
   
     add_image_summaries(images=images,
                         images_estimate=images_estimate,
@@ -87,7 +89,7 @@ def setup_model(model, config):
                         normals_estimate=normals_estimate,
                         labels=labels,
                         labels_estimate=labels_estimate,
-                        num_classes=config['num_classes'])
+                        num_label_classes=num_label_classes)
     update_ops = add_metric_summaries(images=images,
                                       images_estimate=images_estimate,
                                       depth=depth,
@@ -97,7 +99,7 @@ def setup_model(model, config):
                                       depth_weights=weights,
                                       labels=labels,
                                       labels_estimate=labels_estimate,
-                                      config=config)
+                                      num_label_classes=num_label_classes)
 
     model._create_summaries()
     return images_pl, depths_pl, normals_pl, labels_pl, update_ops
@@ -135,16 +137,21 @@ def train_func(config):
     model_func = getattr(module, config['model'])
     helper = DatasetHelper()
     helper.Setup(config)
-    data_list, iterator = helper.get_train_data(config)
+    modalities_num_classes = dict()
+    num_label_classes = None
+    for modality, num_classes in zip(config['output_modality'], config['num_classes']):
+        modalities_num_classes[modality] = num_classes
+        if modality == 'labels':
+            num_label_classes = num_classes
+    data_list, iterator = helper.get_train_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
     global_step = tf.train.get_or_create_global_step()
     step = 0
-    compute_normals = (config['output_modality'] == 'normals')
 
     with tf.variable_scope(resnet_name):
-        model = model_func(num_classes=config['num_classes'], learning_rate=config['learning_rate'],
+        model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                            decay_steps=config['max_iteration'], power=config['power'],
-                           global_step=global_step, compute_normals=compute_normals)
+                           global_step=global_step)
         images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config)
  
     config1 = tf.ConfigProto()
@@ -175,20 +182,35 @@ def train_func(config):
        
     while 1:
         try:
+            input_names_to_feeds = dict()
             if config['input_modality'] == 'rgb':
-                net_input = data_list[0]
+                input_names_to_feeds['rgb'] = data_list[0]
             elif config['input_modality'] == 'depth':
-                net_input = data_list[1]
+                input_names_to_feeds['depth'] = data_list[1]
             elif config['input_modality'] == 'normals':
-                net_input = data_list[2]
+                input_names_to_feeds['normals'] = data_list[2]
 
-            if config['output_modality'] == 'labels':
-                img, label = sess.run([net_input, data_list[3]])
-                feed_dict = {images_pl: img, labels_pl: label}
-            elif config['output_modality'] == 'normals':
-                img, depth, normals = sess.run([net_input, data_list[1], data_list[2]])
-                feed_dict = {images_pl: img, depths_pl: depth, normals_pl: normals}
+            for modality in config['output_modality']:
+                if modality == 'labels':
+                    input_names_to_feeds['labels'] = data_list[3]
+                elif modality == 'depth':
+                    input_names_to_feeds['depth'] = data_list[1]
+                elif modality == 'normals':
+                    input_names_to_feeds['depth'] = data_list[1]
+                    input_names_to_feeds['normals'] = data_list[2]
 
+            output_feeds = sess.run(list(input_names_to_feeds.values()))
+            feed_dict = dict()
+            for feed, name in zip(output_feeds, list(input_names_to_feeds.keys())):
+                if name == 'rgb':
+                    feed_dict[images_pl] = feed
+                elif name == 'depth':
+                    feed_dict[depths_pl] = feed
+                elif name == 'normals':
+                    feed_dict[normals_pl] = feed
+                elif name == 'labels':
+                    feed_dict[labels_pl] = feed
+                    
             inputs = [model.loss, model.train_op, model.summary_op] + update_ops
             result = sess.run(inputs, feed_dict=feed_dict)
             loss_batch = result[0]
