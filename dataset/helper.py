@@ -182,11 +182,11 @@ class DatasetHelper:
         dataset = dataset.map(
         lambda image_file, depth_file, label_file: tuple(tf.py_func(
             self._read_images_function, [image_file, depth_file, label_file, num_label_classes, self.name, compute_normals], [tf.uint8, tf.uint16, tf.float32, tf.uint16, tf.int32])))
-        dataset = dataset.map(parser)
-        dataset = dataset.shuffle(buffer_size=100)
+        dataset = dataset.map(parser, num_parallel_calls=8)
+        dataset = dataset.shuffle(buffer_size=200)
         dataset = dataset.batch(config['batch_size'])
-        dataset = dataset.repeat(100)
-        dataset = dataset.prefetch(1)
+        dataset = dataset.repeat(200)
+        dataset = dataset.prefetch(32)
         iterator = dataset.make_one_shot_iterator()
         return iterator
 

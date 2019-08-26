@@ -65,6 +65,10 @@ def test_func(config):
                   % (str(datetime.datetime.now()), str(os.getpid()), total_num)
                 print 'mIoU: ', compute_iou(output_matrix)
 
+            if 'save_dir' in config.keys() and (step+1) % 5000 == 0:
+                np.save(config['save_dir'] + '/output_matrix.npy', output_matrix)
+                with open(config['save_dir'] + '/output_step.txt') as f:
+                    f.write(str(step))
             step += 1
 
         except tf.errors.OutOfRangeError:
