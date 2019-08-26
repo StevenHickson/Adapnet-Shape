@@ -25,11 +25,6 @@ from train_utils import *
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
 
-def calculate_weights(depths, normals):
-    valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
-    valid_normals = tf.expand_dims(tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0), axis=-1)
-    return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
-
 def original_restore(sess, save_file):
     reader = tf.train.NewCheckpointReader(save_file)
     var_str = reader.debug_string()

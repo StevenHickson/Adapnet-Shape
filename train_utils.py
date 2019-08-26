@@ -19,6 +19,11 @@ def extract_modalities(config):
             num_label_classes = num_classes
     return modalities_num_classes, num_label_classes
 
+def calculate_weights(depths, normals):
+    valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
+    valid_normals = tf.expand_dims(tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0), axis=-1)
+    return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
+
 def setup_model(model, config, train=True):
     images=None
     images_estimate=None
@@ -47,6 +52,10 @@ def setup_model(model, config, train=True):
         depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
         depth = tf.cast(depths_pl, tf.float32)
         model_input = tf.tile(depth, [1,1,1,3])
+    elif config['input_modality'] == 'depth_notile':
+        depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
+        depth = tf.cast(depths_pl, tf.float32)
+        model_input = depth
     
     for modality, num_classes in zip(config['output_modality'], config['num_classes']):
         if modality == 'labels':
@@ -100,7 +109,7 @@ def setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl,
     input_names_to_feeds = dict()
     if config['input_modality'] == 'rgb':
         input_names_to_feeds['rgb'] = data_list[0]
-    elif config['input_modality'] == 'depth':
+    elif config['input_modality'] == 'depth' or config['input_modality'] == 'depth_notile':
         input_names_to_feeds['depth'] = data_list[1]
     elif config['input_modality'] == 'normals':
         input_names_to_feeds['normals'] = data_list[2]
