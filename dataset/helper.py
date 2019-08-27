@@ -73,12 +73,72 @@ def CreateScenenetMapping():
     global label_nyu_mapping
 
     camera_params = [277.128129211,0,160,0,289.705627485,120,0,0,1]
-    normal_params = [5,0.02,10]
+    normal_params = [5,0.02,10,0.04]
     for i in range(0, 15):
         label_nyu_mapping[i] = i
 
+def CreateNYU40Mapping():
+    global camera_params
+    global normal_params
+    global label_nyu_mapping
+
+    camera_params = [238.44,0,313.04,0,582.69,242.74,0,0,1]
+    normal_params = [5,0.02,30,0.04]
+    label_nyu_mapping = [40,40,3,22,5,40,12,38,40,40,2,39,40,40,26,40,24,40,7,40,1,40,40,34
+			,38,29,40,8,40,40,40,40,38,40,40,14,40,38,40,40,40,15,39,40,30,40,40,39
+			,40,39,38,40,38,40,37,40,38,38,9,40,40,38,40,11,38,40,40,40,40,40,40,40
+			,40,40,40,40,40,40,38,13,40,40,6,40,23,40,39,10,16,40,40,40,40,38,40,40
+			,40,40,40,40,40,40,40,38,40,39,40,40,40,40,39,38,40,40,40,40,40,40,18,40
+			,40,19,28,33,40,40,40,40,40,40,40,40,40,38,27,36,40,40,40,40,21,40,20,35
+			,40,40,40,40,40,40,40,40,38,40,40,40,4,32,40,40,39,40,39,40,40,40,40,40
+			,17,40,40,25,40,39,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,39,38,38
+			,40,40,39,40,39,40,38,39,38,40,40,40,40,40,40,40,40,40,40,39,40,38,40,40
+			,38,38,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,39,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,40
+			,40,40,39,40,40,40,38,40,40,39,40,40,38,40,40,40,40,40,40,40,40,40,40,40
+			,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,31,40,40,40,40,40
+			,40,40,38,40,40,38,39,39,40,40,40,40,40,40,40,40,40,38,40,39,40,40,39,40
+			,40,40,38,40,40,40,40,40,40,40,40,38,39,40,40,40,40,40,40,38,40,40,40,40
+			,40,40,40,40,40,40,40,38,39,40,40,40,40,40,40,40,39,40,40,40,40,40,40,38
+			,40,40,40,38,40,39,40,40,40,39,39,40,40,40,40,40,40,40,40,40,40,39,40,40
+			,40,40,40,40,40,40,40,40,40,40,39,39,40,40,39,39,40,40,40,40,38,40,40,38
+			,39,39,40,39,40,39,38,40,40,40,40,40,40,40,40,40,40,40,39,40,38,40,39,40
+			,40,40,40,40,39,39,40,40,40,40,40,40,39,39,40,40,38,39,39,40,40,40,40,40
+			,40,40,40,40,39,39,40,40,40,40,39,40,40,40,40,40,39,40,40,39,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,39,38,40,40,40,40,40,40,40,39,38,39,40
+			,38,39,40,39,40,39,40,40,40,40,40,40,40,40,38,40,40,40,40,40,38,40,40,39
+			,40,40,40,39,40,38,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,40,40
+			,40,40,40,40,40,40,40,39,38,40,40,38,40,40,38,40,40,40,40,40,40,40,40,40
+			,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,38,40,40,40
+			,40,40,40,40,40,40,40,40,38,38,38,40,40,40,38,40,40,40,38,38,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,40,40,40
+			,40,40,40,38,40,38,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40
+			,40,39,40,39,40,40,40,40,38,38,40,40,40,38,40,40,40,40,40,40,40,40,40,40
+			,40,40,40,40,39,40,40,39,40,40,39,39,40,40,40,40,40,40,40,40,39,39,39,40
+			,40,40,40,39,40,40,40,40,40,40,40,40,39,40,40,40,40,40,39,40,40,40,40,40
+			,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,39,40,40,38,40,39,40
+			,40,40,40,38,40,40,40,40,40,38,40,40,40,40,40,40,40,39,40,40,40,40,40,40
+			,40,40,40,39,40,40]
+    #label_nyu_mapping[:] = [x - 1 for x in label_nyu_mapping] 
+    label_nyu_mapping.insert(0,0)
+
+def CreateNYU13Mapping():
+    global label_nyu_mapping
+
+    CreateNYU40Mapping() 
+    map_to_20 = [0,12,5,6,1,4,9,10,12,13,6,8,6,13,10,6,13,6,7,7,5,7,3,2,6,11,7,7,7,7,7,7,6,7,7,7,7,7,7,6,7]
+    i = 0
+    #for ln in label_nyu_mapping:
+    #    print(str(i) + ': ' + str(map_to_20[ln]))
+    #    label_nyu_mapping[i] = map_to_20[ln]
+    #    i+=1
+    label_nyu_mapping[:] = [map_to_20[x] for x in label_nyu_mapping]
+
 def MapLabels(label, name):
-    if name == 'scannet':
+    if name in ['scannet','nyu13','nyu40']:
         label_nyu = np.array([label_nyu_mapping[x] for x in label.flatten()])
         return label_nyu.reshape(label.shape).astype(np.uint16)
     return label.astype(np.uint16)
@@ -90,7 +150,7 @@ def CreateScannetMapping():
     global label_nyu_mapping
 
     camera_params = [577.591,0,318.905,0,578.73,242.684,0,0,1]
-    normal_params = [5,0.02,30]
+    normal_params = [5,0.02,30,0.04]
     flat_labels = [1,2,7,8,9,11,19,22,24,29,30,32]
 
     convert_to_20 = [0,1,2,3,4,5,6,7,8,9,10,11,12,9,13,20,14,20,4,20,2,0,0,0,15,20,0,0,16,0,20,0,20,17,18,20,19,0,20,20,0]
@@ -140,6 +200,10 @@ class DatasetHelper:
 	    CreateScannetMapping()
 	elif self.name == 'scenenet':
 	    CreateScenenetMapping()
+        elif self.name == 'nyu40':
+            CreateNYU40Mapping()
+        elif self.name == 'nyu13':
+            CreateNYU13Mapping()
         if 'normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals':
             SetUpNormalCalculation()
 
@@ -183,20 +247,23 @@ class DatasetHelper:
         lambda image_file, depth_file, label_file: tuple(tf.py_func(
             self._read_images_function, [image_file, depth_file, label_file, num_label_classes, self.name, compute_normals], [tf.uint8, tf.uint16, tf.float32, tf.uint16, tf.int32])))
         dataset = dataset.map(parser, num_parallel_calls=8)
+        return dataset
+
+    def get_train_data(self, config, num_label_classes):
+        dataset = self.get_batch('train_data', config, num_label_classes)
         dataset = dataset.shuffle(buffer_size=200)
         dataset = dataset.batch(config['batch_size'])
         dataset = dataset.repeat(200)
         dataset = dataset.prefetch(32)
         iterator = dataset.make_one_shot_iterator()
-        return iterator
-
-    def get_train_data(self, config, num_label_classes):
-        iterator = self.get_batch('train_data', config, num_label_classes)
         rgb, depth, normals, label = iterator.get_next()
         return [rgb, depth, normals, label], iterator
 
     def get_test_data(self, config, num_label_classes):
-        iterator = self.get_batch('test_data', config, num_label_classes)
+        dataset = self.get_batch('test_data', config, num_label_classes)
+        dataset = dataset.batch(config['batch_size'])
+        dataset = dataset.prefetch(8)
+        iterator = dataset.make_one_shot_iterator()
         rgb, depth, normals, label = iterator.get_next()
         return [rgb, depth, normals, label], iterator
 
