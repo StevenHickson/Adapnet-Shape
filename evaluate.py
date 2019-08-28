@@ -50,25 +50,39 @@ def test_func(config):
     step = 0
     total_num = 0
     output_matrix = np.zeros([num_label_classes, 3])
+    start_step = 0
+    # Let's check to see if we have an inference checkpoint
+    if 'save_dir' in config.keys():
+        try:
+            output_matrix = np.load(config['save_dir'] + '/output_matrix.npy')
+            with open(config['save_dir'] + '/output_step.txt', 'r') as f:
+                start_step = int(f.read().strip('\n'))
+        except:
+            print('Could not load save files')
+
+    print('Start step is ', str(start_step), ' mIoU is ', compute_iou(output_matrix))
     while 1:
         try:
             feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
-            probabilities = sess.run([model.softmax], feed_dict=feed_dict)
-            prediction = np.argmax(probabilities[0], 3)
-            label = feed_dict[labels_pl]
-            gt = np.argmax(label, 3)
-            prediction[gt == 0] = 0
-            output_matrix = compute_output_matrix(gt, prediction, output_matrix)
-            total_num += label.shape[0]
-            if (step+1) % config['skip_step'] == 0:
-                print '%s %s] %d. iou updating' \
-                  % (str(datetime.datetime.now()), str(os.getpid()), total_num)
-                print 'mIoU: ', compute_iou(output_matrix)
+            if start_step <= step:
+                probabilities = sess.run([model.softmax], feed_dict=feed_dict)
+                prediction = np.argmax(probabilities[0], 3)
+                label = feed_dict[labels_pl]
+                gt = np.argmax(label, 3)
+                prediction[gt == 0] = 0
+                output_matrix = compute_output_matrix(gt, prediction, output_matrix)
+                total_num += label.shape[0]
+                if (step+1) % config['skip_step'] == 0:
+                    print '%s %s] %d. iou updating' \
+                      % (str(datetime.datetime.now()), str(os.getpid()), total_num)
+                    print 'mIoU: ', compute_iou(output_matrix)
 
-            if 'save_dir' in config.keys() and (step+1) % 5000 == 0:
-                np.save(config['save_dir'] + '/output_matrix.npy', output_matrix)
-                with open(config['save_dir'] + '/output_step.txt') as f:
-                    f.write(str(step))
+                if 'save_dir' in config.keys() and (step+1) % 5000 == 0:
+                    np.save(config['save_dir'] + '/output_matrix.npy', output_matrix)
+                    with open(config['save_dir'] + '/output_step.txt', 'w') as f:
+                        f.write(str(step))
+            elif (step+1) % 5000 == 0:
+                print('Skpping step: %d' % (step))
             step += 1
 
         except tf.errors.OutOfRangeError:
