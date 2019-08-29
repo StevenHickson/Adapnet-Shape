@@ -12,7 +12,7 @@ def extract_normals(normals):
 
 def extract_modalities(config):
     modalities_num_classes = dict()
-    num_label_classes = None
+    num_label_classes = 0
     for modality, num_classes in zip(config['output_modality'], config['num_classes']):
         modalities_num_classes[modality] = num_classes
         if modality == 'labels':

@@ -17,7 +17,7 @@ import network_base
 class AdapNet_pp(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
-                 has_aux_loss=True, compute_normals=False):
+                 has_aux_loss=True):
         
         super(AdapNet_pp, self).__init__()
         self.num_classes = modalities_num_classes.values()[0]
@@ -35,7 +35,7 @@ class AdapNet_pp(network_base.Network):
         self.filters = [256, 512, 1024, 2048]
         self.strides = [1, 2, 2, 1]
         self.global_step = global_step
-        self.compute_normals = compute_normals
+        self.compute_normals = ('normals' in list(modalities_num_classes.keys()))
         if self.training:
             self.keep_prob = 0.5
         else:
