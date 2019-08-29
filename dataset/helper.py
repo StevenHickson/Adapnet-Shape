@@ -155,7 +155,7 @@ def CreateScannetMapping():
 
     convert_to_20 = [0,1,2,3,4,5,6,7,8,9,10,11,12,9,13,20,14,20,4,20,2,0,0,0,15,20,0,0,16,0,20,0,20,17,18,20,19,0,20,20,0]
     label_nyu_mapping[0] = 0
-    with open('/data4/scannetv2-labels.combined.tsv') as tsvfile:
+    with open('/srv/datasets/scannet/scannetv2-labels.combined.tsv') as tsvfile:
         reader = csv.reader(tsvfile, delimiter='\t')
         start = True
         for row in reader:
