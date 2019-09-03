@@ -19,7 +19,10 @@ import os
 import re
 import tensorflow as tf
 import yaml
-from dataset.helper import DatasetHelper
+from dataset.nyu13_dataset import NYU13Dataset
+from dataset.nyu40_dataset import NYU40Dataset
+from dataset.scenenet_dataset import ScenenetDataset
+from dataset.scannet_dataset import ScannetDataset
 from train_utils import *
 
 PARSER = argparse.ArgumentParser()
@@ -53,15 +56,25 @@ def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
     saver.restore(session, save_file)
 
 def train_func(config):
-    #os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
-    helper = DatasetHelper()
+    dataset_name = config['dataset_name']
+    if dataset_name == 'nyu13':
+        helper = NYU13Dataset()
+    elif dataset_name == 'nyu40':
+        helper = NYU40Dataset()
+    elif dataset_name == 'scenenet':
+        helper = ScenenetDataset()
+    elif dataset_name == 'scannet':
+        helper = ScannetDataset()
+    else:
+        print('Non-existant Dataset')
     helper.Setup(config)
     modalities_num_classes, num_label_classes = extract_modalities(config)
     data_list, iterator = helper.get_train_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
     global_step = tf.train.get_or_create_global_step()
+    #global_step = tf.Variable(0, trainable=False, name='Global_Step')
     step = 0
 
     with tf.variable_scope(resnet_name):

@@ -16,120 +16,14 @@
 import cv2
 import csv
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
 import sys
 sys.path.append('/nethome/shickson3/CreateNormals/')
 from python.calc_normals import NormalCalculation
 
-normal_calculator = None
 output_width = None
 output_height = None
-camera_params = []
-normal_params = []
-flat_labels = []
-label_nyu_mapping = dict()
-
-def SetUpNormalCalculation():
-    global normal_calculator
-    normal_calculator = NormalCalculation(camera_params, normal_params, flat_labels)
-    
-def CreateScenenetMapping():
-    global camera_params
-    global normal_params
-    global label_nyu_mapping
-
-    camera_params = [277.128129211,0,160,0,289.705627485,120,0,0,1]
-    normal_params = [5,0.02,10,0.04]
-    for i in range(0, 15):
-        label_nyu_mapping[i] = i
-
-def CreateNYU40Mapping():
-    global camera_params
-    global normal_params
-    global label_nyu_mapping
-
-    camera_params = [238.44,0,313.04,0,582.69,242.74,0,0,1]
-    normal_params = [5,0.02,30,0.04]
-    label_nyu_mapping = [40,40,3,22,5,40,12,38,40,40,2,39,40,40,26,40,24,40,7,40,1,40,40,34
-			,38,29,40,8,40,40,40,40,38,40,40,14,40,38,40,40,40,15,39,40,30,40,40,39
-			,40,39,38,40,38,40,37,40,38,38,9,40,40,38,40,11,38,40,40,40,40,40,40,40
-			,40,40,40,40,40,40,38,13,40,40,6,40,23,40,39,10,16,40,40,40,40,38,40,40
-			,40,40,40,40,40,40,40,38,40,39,40,40,40,40,39,38,40,40,40,40,40,40,18,40
-			,40,19,28,33,40,40,40,40,40,40,40,40,40,38,27,36,40,40,40,40,21,40,20,35
-			,40,40,40,40,40,40,40,40,38,40,40,40,4,32,40,40,39,40,39,40,40,40,40,40
-			,17,40,40,25,40,39,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,39,38,38
-			,40,40,39,40,39,40,38,39,38,40,40,40,40,40,40,40,40,40,40,39,40,38,40,40
-			,38,38,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,39,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,40
-			,40,40,39,40,40,40,38,40,40,39,40,40,38,40,40,40,40,40,40,40,40,40,40,40
-			,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,31,40,40,40,40,40
-			,40,40,38,40,40,38,39,39,40,40,40,40,40,40,40,40,40,38,40,39,40,40,39,40
-			,40,40,38,40,40,40,40,40,40,40,40,38,39,40,40,40,40,40,40,38,40,40,40,40
-			,40,40,40,40,40,40,40,38,39,40,40,40,40,40,40,40,39,40,40,40,40,40,40,38
-			,40,40,40,38,40,39,40,40,40,39,39,40,40,40,40,40,40,40,40,40,40,39,40,40
-			,40,40,40,40,40,40,40,40,40,40,39,39,40,40,39,39,40,40,40,40,38,40,40,38
-			,39,39,40,39,40,39,38,40,40,40,40,40,40,40,40,40,40,40,39,40,38,40,39,40
-			,40,40,40,40,39,39,40,40,40,40,40,40,39,39,40,40,38,39,39,40,40,40,40,40
-			,40,40,40,40,39,39,40,40,40,40,39,40,40,40,40,40,39,40,40,39,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,39,38,40,40,40,40,40,40,40,39,38,39,40
-			,38,39,40,39,40,39,40,40,40,40,40,40,40,40,38,40,40,40,40,40,38,40,40,39
-			,40,40,40,39,40,38,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,40,40
-			,40,40,40,40,40,40,40,39,38,40,40,38,40,40,38,40,40,40,40,40,40,40,40,40
-			,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,38,40,40,40
-			,40,40,40,40,40,40,40,40,38,38,38,40,40,40,38,40,40,40,38,38,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,40,40,40
-			,40,40,40,38,40,38,39,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,40,40,39,40,40,40,40,40,40,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40,40
-			,40,39,40,39,40,40,40,40,38,38,40,40,40,38,40,40,40,40,40,40,40,40,40,40
-			,40,40,40,40,39,40,40,39,40,40,39,39,40,40,40,40,40,40,40,40,39,39,39,40
-			,40,40,40,39,40,40,40,40,40,40,40,40,39,40,40,40,40,40,39,40,40,40,40,40
-			,40,40,40,40,40,40,40,40,40,38,40,40,40,40,40,40,40,39,40,40,38,40,39,40
-			,40,40,40,38,40,40,40,40,40,38,40,40,40,40,40,40,40,39,40,40,40,40,40,40
-			,40,40,40,39,40,40]
-    #label_nyu_mapping[:] = [x - 1 for x in label_nyu_mapping] 
-    label_nyu_mapping.insert(0,0)
-
-def CreateNYU13Mapping():
-    global label_nyu_mapping
-
-    CreateNYU40Mapping() 
-    map_to_20 = [0,12,5,6,1,4,9,10,12,13,6,8,6,13,10,6,13,6,7,7,5,7,3,2,6,11,7,7,7,7,7,7,6,7,7,7,7,7,7,6,7]
-    i = 0
-    #for ln in label_nyu_mapping:
-    #    print(str(i) + ': ' + str(map_to_20[ln]))
-    #    label_nyu_mapping[i] = map_to_20[ln]
-    #    i+=1
-    label_nyu_mapping[:] = [map_to_20[x] for x in label_nyu_mapping]
-
-def MapLabels(label, name):
-    if name in ['scannet','nyu13','nyu40']:
-        label_nyu = np.array([label_nyu_mapping[x] for x in label.flatten()])
-        return label_nyu.reshape(label.shape).astype(np.uint16)
-    return label.astype(np.uint16)
-
-def CreateScannetMapping():
-    global camera_params
-    global normal_params
-    global flat_labels
-    global label_nyu_mapping
-
-    camera_params = [577.591,0,318.905,0,578.73,242.684,0,0,1]
-    normal_params = [5,0.02,30,0.04]
-    flat_labels = [1,2,7,8,9,11,19,22,24,29,30,32]
-
-    convert_to_20 = [0,1,2,3,4,5,6,7,8,9,10,11,12,9,13,20,14,20,4,20,2,0,0,0,15,20,0,0,16,0,20,0,20,17,18,20,19,0,20,20,0]
-    label_nyu_mapping[0] = 0
-    with open('/srv/datasets/scannet/scannetv2-labels.combined.tsv') as tsvfile:
-        reader = csv.reader(tsvfile, delimiter='\t')
-        start = True
-        for row in reader:
-            if not start:
-                label_nyu_mapping[int(row[0])] = convert_to_20[int(row[4])]
-            start = False
 
 def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_label_classes):
     image_decoded.set_shape([None, None, None])
@@ -156,6 +50,11 @@ def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_lab
 
 class DatasetHelper:
 
+    normal_calculator = None
+
+    def MapLabels(self, label):
+        raise NotImplementedError()
+
     def Setup(self, config):
         global output_width
         global output_height
@@ -164,16 +63,6 @@ class DatasetHelper:
         self.name = config['dataset_name']
 	output_width = config['width']
 	output_height = config['height']
-        if self.name == 'scannet':
-	    CreateScannetMapping()
-	elif self.name == 'scenenet':
-	    CreateScenenetMapping()
-        elif self.name == 'nyu40':
-            CreateNYU40Mapping()
-        elif self.name == 'nyu13':
-            CreateNYU13Mapping()
-        if 'normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals':
-            SetUpNormalCalculation()
 
     def read_raw_images(self, image_file, depth_file, label_file, num_label_classes):
         image_decoded = tf.io.read_file(image_file)
@@ -186,14 +75,14 @@ class DatasetHelper:
         depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
         label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
         if compute_normals:
-            normals_decoded = normal_calculator.Calculate(depth_decoded, cv2.resize(label_decoded, depth_decoded.shape, interpolation=cv2.INTER_NEAREST))
+            normals_decoded = self.normal_calculator.Calculate(depth_decoded, cv2.resize(label_decoded, depth_decoded.shape[::-1], interpolation=cv2.INTER_NEAREST))
         else:
             normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
         image_decoded = cv2.resize(image_decoded, (self.config['width'],self.config['height']))
         depth_decoded = cv2.resize(depth_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         normals_decoded = cv2.resize(normals_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
-        label_decoded = MapLabels(label_decoded, dataset_name)
+        label_decoded = self.MapLabels(label_decoded)
         return image_decoded, depth_decoded, normals_decoded, label_decoded, num_label_classes
 
     def get_batch(self, split, config, num_label_classes):
