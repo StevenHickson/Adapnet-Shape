@@ -31,38 +31,6 @@ normal_params = []
 flat_labels = []
 label_nyu_mapping = dict()
 
-def compute_output_matrix(label_max, pred_max, output_matrix):
-    # Input:
-    # label_max shape(B,H,W): np.argmax(one_hot_encoded_label,3)
-    # pred_max shape(B,H,W): np.argmax(softmax,3)
-    # output_matrix shape(NUM_CLASSES,3): if func is called first time an array of 
-    #                                     zeros.
-    # Output:
-    # output_matrix shape(NUM_CLASSES,3): columns with total count of true positives,
-    #                                     false positives and false negatives.
-    for i in xrange(output_matrix.shape[0]):
-        temp = pred_max == i
-        temp_l = label_max == i
-        tp = np.logical_and(temp, temp_l)
-        temp[temp_l] = True
-        fp = np.logical_xor(temp, temp_l)
-        temp = pred_max == i
-        temp[fp] = False
-        fn = np.logical_xor(temp, temp_l)
-        output_matrix[i, 0] += np.sum(tp)
-        output_matrix[i, 1] += np.sum(fp)
-        output_matrix[i, 2] += np.sum(fn)
-
-    return output_matrix
-
-def compute_iou(output_matrix):
-    # Input:
-    # output_matrix shape(NUM_CLASSES,3): columns with total count of true positives,
-    #                                     false positives and false negatives.
-    # Output:
-    # IoU in percent form (doesn't count label id 0 contribution as it is assumed to be void) 
-    return np.sum(output_matrix[1:, 0]/(np.sum(output_matrix[1:, :], 1).astype(np.float32)+1e-10))/(output_matrix.shape[0]-1)*100
-
 def SetUpNormalCalculation():
     global normal_calculator
     normal_calculator = NormalCalculation(camera_params, normal_params, flat_labels)

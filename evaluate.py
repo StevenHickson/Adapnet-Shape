@@ -19,11 +19,79 @@ import os
 import numpy as np
 import tensorflow as tf
 import yaml
-from dataset.helper import DatasetHelper, compute_output_matrix, compute_iou
+import math
+from dataset.helper import DatasetHelper
 from train_utils import *
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_test.config')
+
+def compute_label_matrix(label_max, pred_max, output_matrix):
+    # Input:
+    # label_max shape(B,H,W): np.argmax(one_hot_encoded_label,3)
+    # pred_max shape(B,H,W): np.argmax(softmax,3)
+    # output_matrix shape(NUM_CLASSES,3): if func is called first time an array of 
+    #                                     zeros.
+    # Output:
+    # output_matrix shape(NUM_CLASSES,3): columns with total count of true positives,
+    #                                     false positives and false negatives.
+    for i in xrange(output_matrix.shape[0]):
+        temp = pred_max == i
+        temp_l = label_max == i
+        tp = np.logical_and(temp, temp_l)
+        temp[temp_l] = True
+        fp = np.logical_xor(temp, temp_l)
+        temp = pred_max == i
+        temp[fp] = False
+        fn = np.logical_xor(temp, temp_l)
+        output_matrix[i, 0] += np.sum(tp)
+        output_matrix[i, 1] += np.sum(fp)
+        output_matrix[i, 2] += np.sum(fn)
+
+    return output_matrix
+
+def compute_iou(output_matrix):
+    # Input:
+    # output_matrix shape(NUM_CLASSES,3): columns with total count of true positives,
+    #                                     false positives and false negatives.
+    # Output:
+    # IoU in percent form (doesn't count label id 0 contribution as it is assumed to be void) 
+    return np.sum(output_matrix[1:, 0]/(np.sum(output_matrix[1:, :], 1).astype(np.float32)+1e-10))/(output_matrix.shape[0]-1)*100
+
+def get_label_metrics(probabilities, feed_dict, labels_pl, labels_matrix):
+    prediction = np.argmax(probabilities[0], 3)
+    label = feed_dict[labels_pl]
+    gt = np.argmax(label, 3)
+    prediction[gt == 0] = 0
+    return compute_label_matrix(gt, prediction, labels_matrix)
+
+def compute_normals_matrix(normals_gt, pred, depth, normals_matrix):
+    weights = ~((np.squeeze(depth) == 0) + (normals_gt[..., :] == [0,0,0])[..., 0])
+    num_weights = float(np.sum(weights))
+    gt_norm = normals_gt / (np.linalg.norm(normals_gt,axis=-1, keepdims=True)+1e-10)
+    pred_norm = pred / (np.linalg.norm(pred,axis=-1, keepdims=True)+1e-10)
+    cos_dist = (gt_norm[..., 0] * pred_norm[..., 0] + gt_norm[..., 1] * pred_norm[..., 1] + gt_norm[..., 2] * pred_norm[..., 2])
+    dist_angle = 180.0 / math.pi * np.arccos(np.clip(cos_dist, -1.0, 1.0))
+    masked_dist = dist_angle[weights]
+    below_11_25 = np.sum(masked_dist <= 11.25) / num_weights
+    below_22_5 = np.sum(masked_dist <= 22.5) / num_weights
+    below_30 = np.sum(masked_dist <= 30.0) / num_weights
+    mean = np.mean(masked_dist)
+    normals_matrix += np.array([below_11_25, below_22_5, below_30, mean])
+    return normals_matrix
+
+def get_normals_metrics(normals_matrix, total_num):
+    #return normals_matrix / float(total_num)
+    return normals_matrix
+
+def print_info(labels_matrix, normals_matrix, total_num, finished=False):
+    normals_metrics = get_normals_metrics(normals_matrix, total_num)
+    if ~finished:
+        print '%s %s] %d. iou updating' \
+          % (str(datetime.datetime.now()), str(os.getpid()), total_num)
+    print 'mIoU: ', compute_iou(labels_matrix)
+    print '11.25: ', normals_metrics[0], '22.5: ', normals_metrics[1], '30: ', normals_metrics[2], 'mean angle error: ', normals_metrics[3]
+
 
 def test_func(config):
     module = importlib.import_module('models.' + config['model'])
@@ -49,37 +117,45 @@ def test_func(config):
     #sess.run(iterator.initializer)
     step = 0
     total_num = 0
-    output_matrix = np.zeros([num_label_classes, 3])
+    labels_matrix = np.zeros([num_label_classes, 3])
+    normals_matrix = np.zeros([4])
     start_step = 0
     # Let's check to see if we have an inference checkpoint
     if 'save_dir' in config.keys():
         try:
-            output_matrix = np.load(config['save_dir'] + '/output_matrix.npy')
+            labels_matrix = np.load(config['save_dir'] + '/labels_matrix.npy')
+            normals_matrix = np.load(config['save_dir'] + '/normals_matrix.npy')
             with open(config['save_dir'] + '/output_step.txt', 'r') as f:
                 start_step = int(f.read().strip('\n'))
         except:
             print('Could not load save files')
 
-    print('Start step is ', str(start_step), ' mIoU is ', compute_iou(output_matrix))
+    print('Start step is ', str(start_step), ' mIoU is ', compute_iou(labels_matrix))
     while 1:
         try:
             feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
             if start_step <= step:
-                probabilities = sess.run([model.softmax], feed_dict=feed_dict)
-                prediction = np.argmax(probabilities[0], 3)
-                label = feed_dict[labels_pl]
-                gt = np.argmax(label, 3)
-                prediction[gt == 0] = 0
-                output_matrix = compute_output_matrix(gt, prediction, output_matrix)
-                total_num += label.shape[0]
+                inputs = []
+                for mod in config['output_modality']:
+                    if mod == 'labels':
+                        inputs.append(model.softmax)
+                    elif mod == 'normals':
+                        inputs.append(model.output_normals)
+                results = sess.run(inputs, feed_dict=feed_dict)
+                for mod, result in zip(config['output_modality'], results):
+                    if mod == 'labels':
+                        labels_matrix = get_label_metrics(result, feed_dict, labels_pl, labels_matrix)
+                    elif mod == 'normals':
+                        normals_matrix = compute_normals_matrix(feed_dict[normals_pl], result, feed_dict[depths_pl], normals_matrix)
+                    
+                total_num += config['batch_size']
                 if (step+1) % config['skip_step'] == 0:
-                    print '%s %s] %d. iou updating' \
-                      % (str(datetime.datetime.now()), str(os.getpid()), total_num)
-                    print 'mIoU: ', compute_iou(output_matrix)
+                    print_info(labels_matrix, normals_matrix, total_num, False)
 
                 if 'save_dir' in config.keys() and (step+1) % 1000 == 0:
                     print('Saving evaluation')
-                    np.save(config['save_dir'] + '/output_matrix.npy', output_matrix)
+                    np.save(config['save_dir'] + '/labels_matrix.npy', labels_matrix)
+                    np.save(config['save_dir'] + '/normals_matrix.npy', normals_matrix)
                     with open(config['save_dir'] + '/output_step.txt', 'w') as f:
                         f.write(str(step))
             elif (step+1) % 500 == 0:
@@ -90,7 +166,7 @@ def test_func(config):
             step += 1
 
         except tf.errors.OutOfRangeError:
-            print 'mIoU: ', compute_iou(output_matrix), 'total_data: ', total_num
+            print_info(labels_matrix, normals_matrix, total_num, True)
             break
 
 def main():
