@@ -19,88 +19,14 @@ import os
 import re
 import tensorflow as tf
 import yaml
-from dataset.helper import DatasetHelper
+from dataset.nyu13_dataset import NYU13Dataset
+from dataset.nyu40_dataset import NYU40Dataset
+from dataset.scenenet_dataset import ScenenetDataset
+from dataset.scannet_dataset import ScannetDataset
 from train_utils import *
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-c', '--config', default='config/cityscapes_train.config')
-
-def calculate_weights(depths, normals):
-    valid_depths = tf.math.not_equal(tf.cast(depths_pl, tf.float32), 0)
-    valid_normals = tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0)
-    return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
-
-def setup_model(model, config):
-    images=None
-    images_estimate=None
-    depth=None
-    images_pl=None
-    depths_pl=None
-    normals_pl=None
-    labels_pl=None
-    depth_estimate=None
-    normals=None
-    normals_estimate=None
-    labels=None
-    labels_estimate=None
-    weights = None
-
-    if config['input_modality'] == 'rgb':
-        images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        images=images_pl
-        model_input = images_pl
-    elif config['input_modality'] == 'normals':
-        normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        normals = extract_normals(normals_pl)
-        model_input = normals_pl
-    elif config['input_modality'] == 'depth':
-        depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
-        depth = tf.cast(depths_pl, tf.float32)
-        model_input = tf.tile(depth, [1,1,1,3])
-    
-    if config['output_modality'] == 'labels':
-        labels_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'],
-                                                config['num_classes']])
-        model_output = labels_pl
-        labels = extract_labels(labels_pl)
-    elif config['output_modality'] == 'normals':
-        normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
-        depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
-        model_output = normals_pl
-        depth = depths_pl
-        normals = extract_normals(normals_pl)
-        weights = calculate_weights(depth, normals)
-    
-    model.build_graph(model_input, model_output, weights)
-    model.create_optimizer()
-    
-    if config['output_modality'] == 'labels':
-        labels_estimate = extract_labels(model.softmax)
-    elif config['output_modality'] == 'normals':
-        normals_estimate = extract_normals(model.output)
-  
-    add_image_summaries(images=images,
-                        images_estimate=images_estimate,
-                        depth=depth,
-                        depth_estimate=depth_estimate,
-                        normals=normals,
-                        normals_estimate=normals_estimate,
-                        labels=labels,
-                        labels_estimate=labels_estimate,
-                        num_classes=config['num_classes'])
-    update_ops = add_metric_summaries(images=images,
-                                      images_estimate=images_estimate,
-                                      depth=depth,
-                                      depth_estimate=depth_estimate,
-                                      normals=normals,
-                                      normals_estimate=normals_estimate,
-                                      depth_weights=weights,
-                                      labels=labels,
-                                      labels_estimate=labels_estimate,
-                                      config=config)
-
-    model._create_summaries()
-    return images_pl, depths_pl, normals_pl, labels_pl, update_ops
 
 def original_restore(sess, save_file):
     reader = tf.train.NewCheckpointReader(save_file)
@@ -130,21 +56,31 @@ def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
     saver.restore(session, save_file)
 
 def train_func(config):
-    #os.environ['CUDA_VISIBLE_DEVICES'] = config['gpu_id']
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
-    helper = DatasetHelper()
+    dataset_name = config['dataset_name']
+    if dataset_name == 'nyu13':
+        helper = NYU13Dataset()
+    elif dataset_name == 'nyu40':
+        helper = NYU40Dataset()
+    elif dataset_name == 'scenenet':
+        helper = ScenenetDataset()
+    elif dataset_name == 'scannet':
+        helper = ScannetDataset()
+    else:
+        print('Non-existant Dataset')
     helper.Setup(config)
-    data_list, iterator = helper.get_train_data(config)
+    modalities_num_classes, num_label_classes = extract_modalities(config)
+    data_list, iterator = helper.get_train_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
     global_step = tf.train.get_or_create_global_step()
+    #global_step = tf.Variable(0, trainable=False, name='Global_Step')
     step = 0
-    compute_normals = (config['output_modality'] == 'normals')
 
     with tf.variable_scope(resnet_name):
-        model = model_func(num_classes=config['num_classes'], learning_rate=config['learning_rate'],
+        model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                            decay_steps=config['max_iteration'], power=config['power'],
-                           global_step=global_step, compute_normals=compute_normals)
+                           global_step=global_step)
         images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config)
  
     config1 = tf.ConfigProto()
@@ -175,20 +111,7 @@ def train_func(config):
        
     while 1:
         try:
-            if config['input_modality'] == 'rgb':
-                net_input = data_list[0]
-            elif config['input_modality'] == 'depth':
-                net_input = data_list[1]
-            elif config['input_modality'] == 'normals':
-                net_input = data_list[2]
-
-            if config['output_modality'] == 'labels':
-                img, label = sess.run([net_input, data_list[3]])
-                feed_dict = {images_pl: img, labels_pl: label}
-            elif config['output_modality'] == 'normals':
-                img, depth, normals = sess.run([net_input, data_list[1], data_list[2]])
-                feed_dict = {images_pl: img, depths_pl: depth, normals_pl: normals}
-
+            feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
             inputs = [model.loss, model.train_op, model.summary_op] + update_ops
             result = sess.run(inputs, feed_dict=feed_dict)
             loss_batch = result[0]
