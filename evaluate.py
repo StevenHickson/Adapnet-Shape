@@ -62,9 +62,9 @@ def compute_iou(output_matrix):
     return np.sum(output_matrix[1:, 0]/(np.sum(output_matrix[1:, :], 1).astype(np.float32)+1e-10))/(output_matrix.shape[0]-1)*100
 
 def get_label_metrics(probabilities, feed_dict, labels_pl, labels_matrix):
-    prediction = np.argmax(probabilities[0], 3)
+    prediction = np.argmax(probabilities, axis=-1)
     label = feed_dict[labels_pl]
-    gt = np.argmax(label, 3)
+    gt = np.argmax(label, axis=-1)
     prediction[gt == 0] = 0
     return compute_label_matrix(gt, prediction, labels_matrix)
 
@@ -83,11 +83,11 @@ def compute_normals_matrix(normals_gt, pred, depth, normals_matrix):
     normals_matrix += np.array([below_11_25, below_22_5, below_30, mean])
     return normals_matrix
 
-def get_normals_metrics(normals_matrix, total_num):
-    #return normals_matrix / float(total_num)
-    return normals_matrix
+def get_normals_metrics(normals_matrix, step):
+    return normals_matrix / float(step)
+    #return normals_matrix
 
-def print_info(labels_matrix, normals_matrix, total_num, finished=False):
+def print_info(labels_matrix, normals_matrix, step, total_num, finished=False):
     normals_metrics = get_normals_metrics(normals_matrix, total_num)
     if ~finished:
         print '%s %s] %d. iou updating' \
@@ -163,7 +163,7 @@ def test_func(config):
                     
                 total_num += config['batch_size']
                 if (step+1) % config['skip_step'] == 0:
-                    print_info(labels_matrix, normals_matrix, total_num, False)
+                    print_info(labels_matrix, normals_matrix, step, total_num, False)
 
                 if 'save_dir' in config.keys() and (step+1) % 1000 == 0:
                     print('Saving evaluation')
@@ -179,7 +179,7 @@ def test_func(config):
             step += 1
 
         except tf.errors.OutOfRangeError:
-            print_info(labels_matrix, normals_matrix, total_num, True)
+            print_info(labels_matrix, normals_matrix, step, total_num, True)
             break
 
 def main():
