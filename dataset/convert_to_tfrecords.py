@@ -77,7 +77,7 @@ def WriteTFRecords(record_name, write_queue):
             write_queue.task_done()
             return
         writer.write(record)
-        if (count+1)%5000 == 0:
+        if (count+1)%500 == 0:
             print 'Processed data: {}'.format(count)
         write_queue.task_done()
         count += 1
