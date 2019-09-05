@@ -14,6 +14,8 @@ import argparse
 import cv2
 import numpy as np
 import tensorflow as tf
+import threading
+from Queue import Queue
 
 def _int64_feature(data):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[data]))
@@ -24,62 +26,86 @@ def _bytes_feature(data):
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-f', '--file')
 PARSER.add_argument('-r', '--record')
-PARSER.add_argument('-m', '--mean')
+PARSER.add_argument('-n', '--num_threads')
 
-def decode(txt):
+def decode(txt, read_queue):
     with open(txt) as file_handler:
         all_list = file_handler.readlines()
 
     file_list = []
     for line in all_list:
-        temp = line.strip('\n').split(' ')
-        file_list.append(temp)
+        splits = line.strip('\n').split(',')
+        read_queue.put((splits[0], splits[1], splits[2]))
 
-    return file_list
-
-def convert(f, record_name, mean_flag):
-    count = 0.0
-    writer = tf.python_io.TFRecordWriter(record_name)
-
-    if mean_flag:
-        mean = np.zeros(cv2.imread(f[0][0]).shape, np.float32)
-
-    for name in f:
-        modality1 = cv2.imread(name[0])
-        if mean_flag:
-            mean += modality1
+def CreateTFExamples(rgb_filename, depth_filename, label_filename):
+    rgb = cv2.imread(rgb_filename, cv2.IMREAD_ANYCOLOR)
+    depth = cv2.imread(depth_filename, cv2.IMREAD_ANYDEPTH)
+    label = cv2.imread(label_filename, cv2.IMREAD_ANYDEPTH)
+    if depth is None or rgb is None or label is None:
+        return None
         
-        label = cv2.imread(name[1], cv2.IMREAD_ANYCOLOR)
-        try:
-            assert len(label.shape)==2
-        except AssertionError, e:
-            raise( AssertionError( "Label should be one channel!" ) )
-            
-        height = modality1.shape[0]
-        width = modality1.shape[1]
-        modality1 = modality1.tostring()
-        label = label.tostring()
-        features = {'height':_int64_feature(height),
-                    'width':_int64_feature(width),
-                    'modality1':_bytes_feature(modality1),
-                    'label':_bytes_feature(label),
-                   }
-        example = tf.train.Example(features=tf.train.Features(feature=features))
-        writer.write(example.SerializeToString())
+    height = rgb.shape[0]
+    width = rgb.shape[1]
+    rgb_write = rgb.tostring()
+    depth_write = depth.tostring()
+    label_write = label.tostring()
+    features = {'height':_int64_feature(height),
+                'width':_int64_feature(width),
+                'rgb':_bytes_feature(rgb_write),
+                'depth':_bytes_feature(depth_write),
+                'label':_bytes_feature(label_write),
+               }
+    example = tf.train.Example(features=tf.train.Features(feature=features))
+    return example.SerializeToString()
 
-        if (count+1)%1 == 0:
+def ReadImages(read_queue, write_queue):
+    while not read_queue.empty():
+        rgb, depth, label = read_queue.get()
+        example = CreateTFExamples(rgb, depth, label)
+        if example is not None:
+            write_queue.put(example)
+        read_queue.task_done()
+    return True
+
+def WriteTFRecords(record_name, write_queue):
+    writer = tf.python_io.TFRecordWriter(record_name)
+    count = 0
+    while True:
+        record = write_queue.get()
+        if record == 'Done':
+            writer.close()
+            write_queue.task_done()
+            return
+        writer.write(record)
+        if (count+1)%5000 == 0:
             print 'Processed data: {}'.format(count)
+        write_queue.task_done()
+        count += 1
 
-        count = count+1
+def convert(read_queue, record_name, num_threads):
 
-    if mean_flag:
-        mean = mean/count
-        np.save(record_name.split('.')[0]+'.npy', mean)
+    write_queue = Queue(maxsize=0)
+    worker = threading.Thread(target=WriteTFRecords, kwargs=dict(record_name=record_name, write_queue=write_queue))
+    worker.start()
+    for i in range(num_threads):
+        read_worker = threading.Thread(target=ReadImages, kwargs=dict(read_queue=read_queue, write_queue=write_queue))
+        read_worker.start()
+
+    # Wait for read_queue to be empty
+    read_queue.join()
+
+    # Send write_queue the finish signal
+    write_queue.put('Done')
+
+    # Wait for write_queue to be empty
+    write_queue.join()
+        
 
 def main():
     args = PARSER.parse_args()
+    read_queue = Queue(maxsize=0)
     if args.file:
-        file_list = decode(args.file)
+         decode(args.file, read_queue)
     else:
         print '--file file_address missing'
         return
@@ -88,10 +114,11 @@ def main():
     else:
         print '--record tfrecord name missing'
         return
-    mean_flag = False
-    if args.record:
-        mean_flag = args.mean
-    convert(file_list, record_name, mean_flag)
+    if args.num_threads:
+        num_threads = int(args.num_threads)
+    else:
+        num_threads = 50
+    convert(read_queue, record_name, num_threads)
 
 if __name__ == '__main__':
     main()
