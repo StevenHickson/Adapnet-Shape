@@ -81,7 +81,7 @@ def train_func(config):
         model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                            decay_steps=config['max_iteration'], power=config['power'],
                            global_step=global_step)
-        images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config)
+        images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config)
  
     config1 = tf.ConfigProto()
     config1.gpu_options.allow_growth = True
@@ -111,9 +111,9 @@ def train_func(config):
        
     while 1:
         try:
-            feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
             inputs = [model.loss, model.train_op, model.summary_op] + update_ops
-            result = sess.run(inputs, feed_dict=feed_dict)
+            inputs = setup_sess_inputs(data_list, inputs, config)
+            result = sess.run(inputs)
             loss_batch = result[0]
             summary = result[2]
             if (step + 1) % config['summaries_step'] == 0:
