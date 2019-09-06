@@ -187,10 +187,18 @@ class AdapNet_join(network_base.Network):
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
         return loss
 
-    def create_optimizer(self):
-        self.lr = tf.train.polynomial_decay(self.learning_rate, self.global_step,
+    def create_lr(self):
+        return tf.train.polynomial_decay(self.learning_rate, self.global_step,
                                             self.decay_steps, power=self.power)
-        self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+
+    def get_optimizer(self):
+        self.lr = self.create_lr()
+        self.opt = tf.train.AdamOptimizer(self.lr)
+        return self.opt
+
+    def create_optimizer(self):
+        self.opt = self.get_optimizer()
+        self.train_op = self.opt.minimize(self.loss, global_step=self.global_step)
 
     def _create_summaries(self):
         with tf.name_scope("summaries"):

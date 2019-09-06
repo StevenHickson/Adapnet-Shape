@@ -77,13 +77,62 @@ def train_func(config):
     #global_step = tf.Variable(0, trainable=False, name='Global_Step')
     step = 0
 
+    model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
+                       decay_steps=config['max_iteration'], power=config['power'],
+                       global_step=global_step)
+    lr = model.create_lr()
+    opt = tf.train.AdamOptimizer(lr)
+
+    # Calculate the gradients for each model tower.
+    tower_grads = []
+    losses = 0.0
     with tf.variable_scope(resnet_name):
-        model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
-                           decay_steps=config['max_iteration'], power=config['power'],
-                           global_step=global_step)
-        images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config)
+        for i in xrange(config['num_gpus']):
+            with tf.device('/gpu:%d' % i):
+                with tf.name_scope('%s_%d' % ('tower', i)) as scope:
+                    images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config)
+                    losses += model.loss
+		    # Reuse variables for the next tower.
+                    tf.get_variable_scope().reuse_variables()
+
+                    # Retain the summaries from the final tower.
+                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+
+                    # Calculate the gradients for the batch of data on this CIFAR tower.
+                    grads = opt.compute_gradients(model.loss)
+
+                    # Keep track of the gradients across all towers.
+                    tower_grads.append(grads)
+
+    # We must calculate the mean of each gradient. Note that this is the
+    # synchronization point across all towers.
+    grads = average_gradients(tower_grads)
+
+    # Add a summary to track the learning rate.
+    summaries.append(tf.summary.scalar('learning_rate', lr))
+
+    # Add histograms for gradients.
+    for grad, var in grads:
+      if grad is not None:
+        summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
+
+    # Apply the gradients to adjust the shared variables.
+    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+
+    # Add histograms for trainable variables.
+    # for var in tf.trainable_variables():
+    #  summaries.append(tf.summary.histogram(var.op.name, var))
+
+    # Track the moving averages of all trainable variables.
+    variable_averages = tf.train.ExponentialMovingAverage(
+        0.9999, global_step)
+    variables_averages_op = variable_averages.apply(tf.trainable_variables())
+
+    # Group all updates to into a single train op.
+    train_op = tf.group(apply_gradient_op, variables_averages_op)
+    summary_op = tf.summary.merge_all()
  
-    config1 = tf.ConfigProto()
+    config1 = tf.ConfigProto(allow_soft_placement=True)
     config1.gpu_options.allow_growth = True
     sess = tf.Session(config=config1)
     writer = tf.summary.FileWriter(config['summary_dir'], sess.graph)
@@ -111,7 +160,7 @@ def train_func(config):
        
     while 1:
         try:
-            inputs = [model.loss, model.train_op, model.summary_op] + update_ops
+            inputs = [losses, train_op, summary_op] + update_ops
             inputs = setup_sess_inputs(data_list, inputs, config)
             result = sess.run(inputs)
             loss_batch = result[0]
@@ -135,7 +184,7 @@ def train_func(config):
                 total_loss /= config['skip_step']
                 print '%s %s] Step %s, lr = %f ' \
                   % (str(datetime.datetime.now()), str(os.getpid()), step,
-                     model.lr.eval(session=sess))
+                     lr.eval(session=sess))
                 print '\t loss = %.4f' % (total_loss)
                 print '\t estimated time left: %.1f hours. %d/%d' % (left_hours, step,
                                                                      config['max_iteration'])
