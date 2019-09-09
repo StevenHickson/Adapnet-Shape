@@ -84,12 +84,12 @@ def compute_normals_matrix(normals_gt, pred, depth, normals_matrix):
     return normals_matrix
 
 def get_normals_metrics(normals_matrix, step):
-    return normals_matrix / float(step)
+    return normals_matrix / float(step + 1)
     #return normals_matrix
 
 def print_info(labels_matrix, normals_matrix, step, total_num, finished=False):
-    normals_metrics = get_normals_metrics(normals_matrix, total_num)
-    if ~finished:
+    normals_metrics = get_normals_metrics(normals_matrix, step)
+    if not finished:
         print '%s %s] %d. iou updating' \
           % (str(datetime.datetime.now()), str(os.getpid()), total_num)
     print 'mIoU: ', compute_iou(labels_matrix)
@@ -148,14 +148,14 @@ def test_func(config):
         try:
             feed_dict = setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl, config) 
             if start_step <= step:
-                inputs = []
+                inputs = dict()
                 for mod in config['output_modality']:
                     if mod == 'labels':
-                        inputs.append(model.softmax)
+                        inputs[mod] = model.softmax
                     elif mod == 'normals':
-                        inputs.append(model.output_normals)
-                results = sess.run(inputs, feed_dict=feed_dict)
-                for mod, result in zip(config['output_modality'], results):
+                        inputs[mod] = model.output_normals
+                results = sess.run(list(inputs.values()), feed_dict=feed_dict)
+                for mod, result in zip(list(inputs.keys()), results):
                     if mod == 'labels':
                         labels_matrix = get_label_metrics(result, feed_dict, labels_pl, labels_matrix)
                     elif mod == 'normals':
@@ -179,7 +179,7 @@ def test_func(config):
             step += 1
 
         except tf.errors.OutOfRangeError:
-            print_info(labels_matrix, normals_matrix, step, total_num, True)
+            print_info(labels_matrix, normals_matrix, step - 1, total_num, True)
             break
 
 def main():
