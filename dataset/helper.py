@@ -74,8 +74,16 @@ class DatasetHelper:
         image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
         depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
         label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
-        if compute_normals:
-            normals_decoded = self.normal_calculator.Calculate(depth_decoded, cv2.resize(label_decoded, depth_decoded.shape[::-1], interpolation=cv2.INTER_NEAREST))
+        if image_decoded is None:
+            image_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.uint8)
+        if label_decoded is None:
+            label_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
+        if depth_decoded is None:
+            depth_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
+            normals_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.float32)
+        elif compute_normals:
+            resized_labels = cv2.resize(label_decoded, depth_decoded.shape[::-1], interpolation=cv2.INTER_NEAREST)
+            normals_decoded = self.normal_calculator.Calculate(depth_decoded, resized_labels)
         else:
             normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
         image_decoded = cv2.resize(image_decoded, (self.config['width'],self.config['height']))
