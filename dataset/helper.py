@@ -74,11 +74,9 @@ class DatasetHelper:
         image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
         depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
         label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
-        if image_decoded is None:
+        if image_decoded is None or label_decoded is None or depth_decoded is None:
             image_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.uint8)
-        if label_decoded is None:
             label_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
-        if depth_decoded is None:
             depth_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
             normals_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.float32)
         elif compute_normals:
