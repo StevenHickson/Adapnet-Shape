@@ -47,10 +47,10 @@ label_nyu_mapping = [40,40,3,22,5,40,12,38,40,40,2,39,40,40,26,40,24,40,7,40,1,4
                     ,40,40,40,39,40,40]
 #label_nyu_mapping[:] = [x - 1 for x in label_nyu_mapping] 
 label_nyu_mapping.insert(0,0)
-map_to_13 = [0,12,5,6,1,4,9,10,12,13,6,8,6,13,10,6,13,6,7,7,5,7,3,2,6,11,7,7,7,7,7,7,6,7,7,7,7,7,7,6,7]
-label_nyu_mapping[:] = [map_to_13[x] for x in label_nyu_mapping]
+map_to_20 = [0,1,2,3,4,5,6,7,8,9,10,11,12,9,13,20,14,20,4,20,2,0,0,0,15,20,0,0,16,0,20,0,20,17,18,20,19,0,20,20,0]
+label_nyu_mapping[:] = [map_to_20[x] for x in label_nyu_mapping]
 
-class NYU13Dataset(DatasetHelper):
+class NYU20Dataset(DatasetHelper):
     normal_calculator = NormalCalculation(camera_params, normal_params, flat_labels)
 
     def MapLabels(self, label):

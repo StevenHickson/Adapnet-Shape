@@ -20,6 +20,7 @@ import re
 import tensorflow as tf
 import yaml
 from dataset.nyu13_dataset import NYU13Dataset
+from dataset.nyu40_dataset import NYU20Dataset
 from dataset.nyu40_dataset import NYU40Dataset
 from dataset.scenenet_dataset import ScenenetDataset
 from dataset.scannet_dataset import ScannetDataset
