@@ -90,7 +90,7 @@ def train_func(config):
         for i in xrange(config['num_gpus']):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('%s_%d' % ('tower', i)) as scope:
-                    images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config, train=(i == config['num_gpus'] - 1)
+                    images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config, train=(i == config['num_gpus'] - 1))
                     losses += model.loss
 		    # Reuse variables for the next tower.
                     tf.get_variable_scope().reuse_variables()
