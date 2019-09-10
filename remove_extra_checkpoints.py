@@ -1,7 +1,7 @@
 import os
 import sys
 
-valid_checkpoints = [19999, 39999, 59999, 79999, 99999, 119999, 139999, 150000]
+valid_checkpoints = [99999, 150000]
 
 #ex model.ckpt-81999.data-00000-of-00001
 
