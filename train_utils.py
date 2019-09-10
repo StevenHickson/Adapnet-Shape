@@ -3,6 +3,11 @@ import matplotlib.cm
 import numpy as np
 import tensorflow as tf
 import math
+from dataset.nyu13_dataset import NYU13Dataset
+from dataset.nyu20_dataset import NYU20Dataset
+from dataset.nyu40_dataset import NYU40Dataset
+from dataset.scenenet_dataset import ScenenetDataset
+from dataset.scannet_dataset import ScannetDataset
 
 def extract_labels(labels):
     return tf.math.argmax(labels, axis=-1)
@@ -23,6 +28,23 @@ def calculate_weights(depths, normals):
     valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
     valid_normals = tf.expand_dims(tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0), axis=-1)
     return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
+
+def get_dataset(config):
+    dataset_name = config['dataset_name']
+    if dataset_name == 'nyu13':
+        helper = NYU13Dataset()
+    elif dataset_name == 'nyu20':
+        helper = NYU20Dataset()
+    elif dataset_name == 'nyu40':
+        helper = NYU40Dataset()
+    elif dataset_name == 'scenenet':
+        helper = ScenenetDataset()
+    elif dataset_name == 'scannet':
+        helper = ScannetDataset()
+    else:
+        print('Non-existant Dataset')
+    helper.Setup(config)
+    return helper
 
 def setup_model(model, config, train=True):
     images=None

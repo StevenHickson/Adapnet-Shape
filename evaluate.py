@@ -20,11 +20,6 @@ import numpy as np
 import tensorflow as tf
 import yaml
 import math
-from dataset.nyu13_dataset import NYU13Dataset
-from dataset.nyu40_dataset import NYU20Dataset
-from dataset.nyu40_dataset import NYU40Dataset
-from dataset.scenenet_dataset import ScenenetDataset
-from dataset.scannet_dataset import ScannetDataset
 from train_utils import *
 
 PARSER = argparse.ArgumentParser()
@@ -100,18 +95,7 @@ def print_info(labels_matrix, normals_matrix, step, total_num, finished=False):
 def test_func(config):
     module = importlib.import_module('models.' + config['model'])
     model_func = getattr(module, config['model'])
-    dataset_name = config['dataset_name']
-    if dataset_name == 'nyu13':
-        helper = NYU13Dataset()
-    elif dataset_name == 'nyu40':
-        helper = NYU40Dataset()
-    elif dataset_name == 'scenenet':
-        helper = ScenenetDataset()
-    elif dataset_name == 'scannet':
-        helper = ScannetDataset()
-    else:
-        print('Non-existant Dataset')
-    helper.Setup(config)
+    helper = get_dataset(config)
     modalities_num_classes, num_label_classes = extract_modalities(config)
     data_list, iterator = helper.get_test_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
