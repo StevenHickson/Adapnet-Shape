@@ -15,12 +15,12 @@
 import tensorflow as tf
 import network_base
 
-class AdapNet_join(network_base.Network):
+class AdapNet_shared(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
                  has_aux_loss=True):
         
-        super(AdapNet_join, self).__init__()
+        super(AdapNet_shared, self).__init__()
         self.modalities_num_classes = modalities_num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -115,7 +115,7 @@ class AdapNet_join(network_base.Network):
         eAspp_out = self.conv_batchN_relu(tf.concat((self.IA, self.IB, self.IC, self.ID, self.IE), 3), 1, 1, 256, name='conv10', relu=False)
         return eAspp_out
         
-    def build_decoder(self, num_classes):
+    def build_decoder(self):
         aux1 = None
         aux2 = None
         with tf.variable_scope('conv41'):
@@ -129,15 +129,7 @@ class AdapNet_join(network_base.Network):
             deconv_up2 = self.batch_norm(deconv_up2)
         up2 = self.conv_batchN_relu(tf.concat((deconv_up2, self.skip1), 3), 3, 1, 256, name='conv88') 
         up2 = self.conv_batchN_relu(up2, 3, 1, 256, name='conv95')
-        up2 = self.conv_batchN_relu(up2, 1, 1, num_classes, name='conv78')
-        with tf.variable_scope('conv5'):
-            deconv_up3 = self.tconv2d(up2, 8, num_classes, 4)
-            deconv_up3 = self.batch_norm(deconv_up3)      
-        ## Auxilary
-        if self.has_aux_loss:
-            aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
-            aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
-        return aux1, aux2, deconv_up3
+        return deconv_up1, deconv_up2, up2
 
      
     def _setup(self, data):   
@@ -145,20 +137,27 @@ class AdapNet_join(network_base.Network):
 
         self.eAspp_out = self.build_encoder(data)
 
-        ### Upsample/Decoders
+        ### Upsample/Decoder
+        deconv_up1, deconv_up2, up2 = self.build_decoder()
         for modality, num_classes in self.modalities_num_classes.iteritems(): 
             with tf.variable_scope(modality):
-                aux1, aux2, deconv_up3 = self.build_decoder(num_classes)
+                up2 = self.conv_batchN_relu(up2, 1, 1, num_classes, name='conv78')
+                deconv_up3 = self.tconv2d(up2, 8, num_classes, 4)
+                deconv_up3 = self.batch_norm(deconv_up3)      
+            ## Auxilary
+                if self.has_aux_loss:
+                    aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
+                    aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
 
-                if modality == 'labels':
-                    self.softmax = tf.nn.softmax(deconv_up3)
-                    self.output_labels = self.softmax
-                    self.aux1_labels = tf.nn.softmax(aux1)
-                    self.aux2_labels = tf.nn.softmax(aux2)
-                elif modality == 'normals':
-                    self.output_normals = deconv_up3
-                    self.aux1_normals = aux1
-                    self.aux2_normals = aux2
+            if modality == 'labels':
+                self.softmax = tf.nn.softmax(deconv_up3)
+                self.output_labels = self.softmax
+                self.aux1_labels = tf.nn.softmax(aux1)
+                self.aux2_labels = tf.nn.softmax(aux2)
+            elif modality == 'normals':
+                self.output_normals = deconv_up3
+                self.aux1_normals = aux1
+                self.aux2_normals = aux2
         
     def compute_cosine_loss(self, label, weights, prediction):
         pred_norm = tf.nn.l2_normalize(prediction, axis=-1)
