@@ -152,12 +152,14 @@ class AdapNet_shared(network_base.Network):
             if modality == 'labels':
                 self.softmax = tf.nn.softmax(deconv_up3)
                 self.output_labels = self.softmax
-                self.aux1_labels = tf.nn.softmax(aux1)
-                self.aux2_labels = tf.nn.softmax(aux2)
+                if self.has_aux_loss:
+                    self.aux1_labels = tf.nn.softmax(aux1)
+                    self.aux2_labels = tf.nn.softmax(aux2)
             elif modality == 'normals':
                 self.output_normals = deconv_up3
-                self.aux1_normals = aux1
-                self.aux2_normals = aux2
+                if self.has_aux_loss:
+                    self.aux1_normals = aux1
+                    self.aux2_normals = aux2
         
     def compute_cosine_loss(self, label, weights, prediction):
         pred_norm = tf.nn.l2_normalize(prediction, axis=-1)

@@ -54,7 +54,7 @@ def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
 def train_func(config):
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
-    helper = get_datset(config)
+    helper = get_dataset(config)
     modalities_num_classes, num_label_classes = extract_modalities(config)
     data_list, iterator = helper.get_train_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'

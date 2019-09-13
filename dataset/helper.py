@@ -44,7 +44,7 @@ def parser(image_decoded, depth_decoded, normals_decoded, label_decoded, num_lab
     label = tf.one_hot(label, num_label_classes)
     label = tf.squeeze(label, axis=2)
     modality1 = tf.cast(tf.reshape(image_decoded, [output_height, output_width, 3]), tf.float32)
-    modality1 = (modality1 - 127.5) / 2.0
+    #modality1 = (modality1 - 127.5) / 2.0
 
     return modality1, depth, normals, label
 
@@ -84,7 +84,7 @@ class DatasetHelper:
             normals_decoded = self.normal_calculator.Calculate(depth_decoded, resized_labels)
         else:
             normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
-        image_decoded = cv2.resize(image_decoded, (self.config['width'],self.config['height']))
+        image_decoded = cv2.cvtColor(cv2.resize(image_decoded, (self.config['width'],self.config['height'])), cv2.COLOR_BGR2RGB)
         depth_decoded = cv2.resize(depth_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         normals_decoded = cv2.resize(normals_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
