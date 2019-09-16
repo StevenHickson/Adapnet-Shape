@@ -18,14 +18,14 @@ import network_base
 class AdapNet_shared(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
-                 has_aux_loss=True):
+                 aux_loss_mode='true'):
         
         super(AdapNet_shared, self).__init__()
         self.modalities_num_classes = modalities_num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
-        self.has_aux_loss = has_aux_loss
+        self.aux_loss_mode = aux_loss_mode
         self.float_type = float_type
         self.power = power
         self.decay_steps = decay_steps
@@ -145,19 +145,19 @@ class AdapNet_shared(network_base.Network):
                 deconv_up3 = self.tconv2d(up2, 8, num_classes, 4)
                 deconv_up3 = self.batch_norm(deconv_up3)      
             ## Auxilary
-                if self.has_aux_loss:
+                if self.aux_loss_mode in [modality, 'both', 'true']:
                     aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
                     aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
 
             if modality == 'labels':
                 self.softmax = tf.nn.softmax(deconv_up3)
                 self.output_labels = self.softmax
-                if self.has_aux_loss:
+                if self.aux_loss_mode in [modality, 'both', 'true']:
                     self.aux1_labels = tf.nn.softmax(aux1)
                     self.aux2_labels = tf.nn.softmax(aux2)
             elif modality == 'normals':
                 self.output_normals = deconv_up3
-                if self.has_aux_loss:
+                if self.aux_loss_mode in [modality, 'both', 'true']:
                     self.aux1_normals = aux1
                     self.aux2_normals = aux2
         
@@ -174,7 +174,7 @@ class AdapNet_shared(network_base.Network):
 
     def _create_loss(self, label, weights):
         loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), weights), axis=[3]))
-        if self.has_aux_loss:
+        if self.aux_loss_mode in ['labels','both','true']:
             aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1_labels+1e-10), weights), axis=[3]))
             aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2_labels+1e-10), weights), axis=[3]))
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
@@ -182,7 +182,7 @@ class AdapNet_shared(network_base.Network):
 
     def _create_normal_loss(self, label, weights):
         loss = self.compute_cosine_loss(label, weights, self.output_normals)
-        if self.has_aux_loss:
+        if self.aux_loss_mode in ['normals','both','true']:
             aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1_normals)
             aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2_normals)
             loss = loss+0.6*aux_loss1+0.5*aux_loss2

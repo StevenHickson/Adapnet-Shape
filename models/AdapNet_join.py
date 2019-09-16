@@ -18,14 +18,14 @@ import network_base
 class AdapNet_join(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
-                 has_aux_loss=True):
+                 aux_loss_mode='true'):
         
         super(AdapNet_join, self).__init__()
         self.modalities_num_classes = modalities_num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
-        self.has_aux_loss = has_aux_loss
+        self.has_aux_loss = aux_loss_mode in ['both','normals','labels','true']
         self.float_type = float_type
         self.power = power
         self.decay_steps = decay_steps

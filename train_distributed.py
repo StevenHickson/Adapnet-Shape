@@ -62,11 +62,13 @@ def train_func(config):
     #global_step = tf.Variable(0, trainable=False, name='Global_Step')
     step = 0
 
-    has_aux_loss = 'aux_loss_mod' in config and config['aux_loss_mod'].lower() == 'false'
+    aux_loss_mode = 'both'
+    if 'aux_loss_mod' in config:
+        aux_loss_mode = config['aux_loss_mod'].lower()
 
     model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                        decay_steps=config['max_iteration'], power=config['power'],
-                       global_step=global_step, has_aux_loss=has_aux_loss)
+                       global_step=global_step, aux_loss_mode=aux_loss_mode)
     if config['num_gpus'] == 1:
         with tf.variable_scope(resnet_name):
             images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config)
