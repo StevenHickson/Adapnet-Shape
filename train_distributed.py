@@ -67,57 +67,65 @@ def train_func(config):
     model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                        decay_steps=config['max_iteration'], power=config['power'],
                        global_step=global_step, has_aux_loss=has_aux_loss)
-    lr = model.create_lr()
-    opt = tf.train.AdamOptimizer(lr)
+    if config['num_gpus'] == 1:
+        with tf.variable_scope(resnet_name):
+            images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config)
+        losses = model.loss
+        train_op = model.train_op
+        summary_op = model.summary_op
+        lr = model.lr
+    else:
+        lr = model.create_lr()
+        opt = tf.train.AdamOptimizer(lr)
 
-    # Calculate the gradients for each model tower.
-    tower_grads = []
-    losses = 0.0
-    with tf.variable_scope(resnet_name):
-        for i in xrange(config['num_gpus']):
-            with tf.device('/gpu:%d' % i):
-                with tf.name_scope('%s_%d' % ('tower', i)) as scope:
-                    images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config, train=(i == config['num_gpus'] - 1))
-                    losses += model.loss
-		    # Reuse variables for the next tower.
-                    tf.get_variable_scope().reuse_variables()
+        # Calculate the gradients for each model tower.
+        tower_grads = []
+        losses = 0.0
+        with tf.variable_scope(resnet_name):
+            for i in xrange(config['num_gpus']):
+                with tf.device('/gpu:%d' % i):
+                    with tf.name_scope('%s_%d' % ('tower', i)) as scope:
+                        images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model_new(model, data_list, config, train=(i == config['num_gpus'] - 1))
+                        losses += model.loss
+                        # Reuse variables for the next tower.
+                        tf.get_variable_scope().reuse_variables()
 
-                    # Retain the summaries from the final tower.
-                    summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+                        # Retain the summaries from the final tower.
+                        summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
-                    # Calculate the gradients for the batch of data on this CIFAR tower.
-                    grads = opt.compute_gradients(model.loss)
+                        # Calculate the gradients for the batch of data on this CIFAR tower.
+                        grads = opt.compute_gradients(model.loss)
 
-                    # Keep track of the gradients across all towers.
-                    tower_grads.append(grads)
+                        # Keep track of the gradients across all towers.
+                        tower_grads.append(grads)
 
-    # We must calculate the mean of each gradient. Note that this is the
-    # synchronization point across all towers.
-    grads = average_gradients(tower_grads)
+        # We must calculate the mean of each gradient. Note that this is the
+        # synchronization point across all towers.
+        grads = average_gradients(tower_grads)
 
-    # Add a summary to track the learning rate.
-    summaries.append(tf.summary.scalar('learning_rate', lr))
+        # Add a summary to track the learning rate.
+        summaries.append(tf.summary.scalar('learning_rate', lr))
 
-    # Add histograms for gradients.
-    for grad, var in grads:
-      if grad is not None:
-        summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
+        # Add histograms for gradients.
+        for grad, var in grads:
+          if grad is not None:
+            summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
-    # Apply the gradients to adjust the shared variables.
-    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+        # Apply the gradients to adjust the shared variables.
+        apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 
-    # Add histograms for trainable variables.
-    # for var in tf.trainable_variables():
-    #  summaries.append(tf.summary.histogram(var.op.name, var))
+        # Add histograms for trainable variables.
+        # for var in tf.trainable_variables():
+        #  summaries.append(tf.summary.histogram(var.op.name, var))
 
-    # Track the moving averages of all trainable variables.
-    variable_averages = tf.train.ExponentialMovingAverage(
-        0.9999, global_step)
-    variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        # Track the moving averages of all trainable variables.
+        variable_averages = tf.train.ExponentialMovingAverage(
+            0.9999, global_step)
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
-    # Group all updates to into a single train op.
-    train_op = tf.group(apply_gradient_op, variables_averages_op)
-    summary_op = tf.summary.merge_all()
+        # Group all updates to into a single train op.
+        train_op = tf.group(apply_gradient_op, variables_averages_op)
+        summary_op = tf.summary.merge_all()
  
     config1 = tf.ConfigProto(allow_soft_placement=True)
     config1.gpu_options.allow_growth = True
