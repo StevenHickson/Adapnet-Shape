@@ -62,9 +62,11 @@ def train_func(config):
     #global_step = tf.Variable(0, trainable=False, name='Global_Step')
     step = 0
 
+    has_aux_loss = 'aux_loss_mod' in config and config['aux_loss_mod'].lower() == 'false'
+
     model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
                        decay_steps=config['max_iteration'], power=config['power'],
-                       global_step=global_step)
+                       global_step=global_step, has_aux_loss=has_aux_loss)
     lr = model.create_lr()
     opt = tf.train.AdamOptimizer(lr)
 
