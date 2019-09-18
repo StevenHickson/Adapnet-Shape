@@ -204,6 +204,8 @@ class AdapNet_shared(network_base.Network):
     def _create_summaries(self):
         with tf.name_scope("summaries"):
             tf.summary.scalar("loss", self.loss)
+            tf.summary.scalar("normal_loss", self.normal_loss)
+            tf.summary.scalar("label_loss", self.label_loss)
             tf.summary.histogram("histogram_loss", self.loss)
             self.summary_op = tf.summary.merge_all()
     
@@ -213,9 +215,11 @@ class AdapNet_shared(network_base.Network):
             self.loss = 0
             for modality, num_classes in self.modalities_num_classes.iteritems(): 
                 if modality == 'normals':
-                    self.loss += self._create_normal_loss(normals, valid_depths)
+                    self.normal_loss = self._create_normal_loss(normals, valid_depths)
+                    self.loss += self.normal_loss
                 elif modality == 'labels':
-                    self.loss += self._create_loss(label, self.weights['labels'])
+                    self.label_loss = self._create_loss(label, self.weights['labels'])
+                    self.loss += self.label_loss
 
 def main():
     print 'Do Nothing'
