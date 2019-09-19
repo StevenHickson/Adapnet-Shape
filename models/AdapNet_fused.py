@@ -15,12 +15,12 @@
 import tensorflow as tf
 import network_base
 
-class AdapNet_shared(network_base.Network):
+class AdapNet_fused(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
                  aux_loss_mode='true'):
         
-        super(AdapNet_shared, self).__init__()
+        super(AdapNet_fused, self).__init__()
         self.modalities_num_classes = modalities_num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -139,27 +139,38 @@ class AdapNet_shared(network_base.Network):
 
         ### Upsample/Decoder
         deconv_up1, deconv_up2, up2 = self.build_decoder()
+        self.total_num_classes = 0
+        split_sizes = []
         for modality, num_classes in self.modalities_num_classes.iteritems(): 
-            with tf.variable_scope(modality):
-                up2 = self.conv_batchN_relu(up2, 1, 1, num_classes, name='conv78')
-                deconv_up3 = self.tconv2d(up2, 8, num_classes, 4)
-                deconv_up3 = self.batch_norm(deconv_up3)      
-            ## Auxilary
-                if self.aux_loss_mode in [modality, 'both', 'true']:
-                    aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
-                    aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
+            self.total_num_classes += num_classes
+            split_sizes.append(num_classes)
 
+        with tf.variable_scope('decoder'):
+            up2 = self.conv_batchN_relu(up2, 1, 1, self.total_num_classes, name='conv78')
+            deconv_up3 = self.tconv2d(up2, 8, self.total_num_classes, 4)
+            deconv_up3 = self.batch_norm(deconv_up3)      
+        ## Auxilary
+            if self.aux_loss_mode != 'false':
+                aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, self.total_num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
+                aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, self.total_num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
+
+        split_id = 0
+        splits = tf.split(deconv_up3, split_sizes, axis=-1)
+        aux1_splits = tf.split(aux1, split_sizes, axis=-1)
+        aux2_splits = tf.split(aux2, split_sizes, axis=-1)
+        for modality, num_classes in self.modalities_num_classes.iteritems(): 
             if modality == 'labels':
-                self.softmax = tf.nn.softmax(deconv_up3)
+                self.softmax = tf.nn.softmax(splits[split_id])
                 self.output_labels = self.softmax
                 if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_labels = tf.nn.softmax(aux1)
-                    self.aux2_labels = tf.nn.softmax(aux2)
+                    self.aux1_labels = tf.nn.softmax(aux1_splits[split_id])
+                    self.aux2_labels = tf.nn.softmax(aux2_splits[split_id])
             elif modality == 'normals':
-                self.output_normals = deconv_up3
+                self.output_normals = splits[split_id]
                 if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_normals = aux1
-                    self.aux2_normals = aux2
+                    self.aux1_normals = aux1_splits[split_id]
+                    self.aux2_normals = aux2_splits[split_id]
+            split_id += 1
         
     def compute_cosine_loss(self, label, weights, prediction):
         pred_norm = tf.nn.l2_normalize(prediction, axis=-1)
