@@ -100,8 +100,12 @@ def test_func(config):
     data_list, iterator = helper.get_test_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
 
+    aux_loss_mode = 'both'
+    if 'aux_loss_mode' in config:
+        aux_loss_mode = config['aux_loss_mode'].lower()
+
     with tf.variable_scope(resnet_name):
-        model = model_func(modalities_num_classes=modalities_num_classes, training=False)
+        model = model_func(modalities_num_classes=modalities_num_classes, aux_loss_mode=aux_loss_mode, training=False)
         images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config, train=False)
 
     config1 = tf.ConfigProto()
