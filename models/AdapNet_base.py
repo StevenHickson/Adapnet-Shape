@@ -14,13 +14,13 @@
 
 import tensorflow as tf
 import network_base
-class AdapNet_pp(network_base.Network):
+class AdapNet_base(network_base.Network):
     def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
                  aux_loss_mode='true'):
         
-        super(AdapNet_pp, self).__init__()
-        self.num_classes = modalities_num_classes.values()[0]
+        super(AdapNet_base, self).__init__()
+        self.modalities_num_classes = modalities_num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
@@ -40,14 +40,15 @@ class AdapNet_pp(network_base.Network):
             self.keep_prob = 0.5
         else:
             self.keep_prob = 1.0
-        if ignore_label:
-            self.weights = tf.ones(self.num_classes-1)
-            self.weights = tf.concat((tf.zeros(1), self.weights), 0)
-        else:
-            self.weights = tf.ones(self.num_classes)
+        self.weights = dict()
+        for modality, num_classes in modalities_num_classes.iteritems():
+            if ignore_label:
+                weight = tf.ones(num_classes-1)
+                self.weights[modality] = tf.concat((tf.zeros(1), weight), 0)
+            else:
+                self.weights[modality] = tf.ones(num_classes)
      
-    def _setup(self, data):   
-        self.input_shape = data.get_shape()
+    def build_encoder(self, data):
         with tf.variable_scope('conv0'):
             self.data_after_bn = self.batch_norm(data)
         self.conv_7x7_out = self.conv_batchN_relu(self.data_after_bn, 7, 2, 64, name='conv1')
@@ -111,38 +112,28 @@ class AdapNet_pp(network_base.Network):
         self.IE_shape = self.b4_out.get_shape()
         self.IE = tf.image.resize_images(self.IE, [self.IE_shape[1], self.IE_shape[2]])
 
-        self.eAspp_out = self.conv_batchN_relu(tf.concat((self.IA, self.IB, self.IC, self.ID, self.IE), 3), 1, 1, 256, name='conv10', relu=False)
+        eAspp_out = self.conv_batchN_relu(tf.concat((self.IA, self.IB, self.IC, self.ID, self.IE), 3), 1, 1, 256, name='conv10', relu=False)
+        return eAspp_out
         
-        ### Upsample/Decoder
+    def build_decoder(self):
+        aux1 = None
+        aux2 = None
         with tf.variable_scope('conv41'):
-            self.deconv_up1 = self.tconv2d(self.eAspp_out, 4, 256, 2)
-            self.deconv_up1 = self.batch_norm(self.deconv_up1)
+            deconv_up1 = self.tconv2d(self.eAspp_out, 4, 256, 2)
+            deconv_up1 = self.batch_norm(deconv_up1)
 
-        self.up1 = self.conv_batchN_relu(tf.concat((self.deconv_up1, self.skip2), 3), 3, 1, 256, name='conv89') 
-        self.up1 = self.conv_batchN_relu(self.up1, 3, 1, 256, name='conv96')
+        up1 = self.conv_batchN_relu(tf.concat((deconv_up1, self.skip2), 3), 3, 1, 256, name='conv89') 
+        up1 = self.conv_batchN_relu(up1, 3, 1, 256, name='conv96')
         with tf.variable_scope('conv16'):
-            self.deconv_up2 = self.tconv2d(self.up1, 4, 256, 2)
-            self.deconv_up2 = self.batch_norm(self.deconv_up2)
-        self.up2 = self.conv_batchN_relu(tf.concat((self.deconv_up2, self.skip1), 3), 3, 1, 256, name='conv88') 
-        self.up2 = self.conv_batchN_relu(self.up2, 3, 1, 256, name='conv95')
-        self.up2 = self.conv_batchN_relu(self.up2, 1, 1, self.num_classes, name='conv78')
-        with tf.variable_scope('conv5'):
-            self.deconv_up3 = self.tconv2d(self.up2, 8, self.num_classes, 4)
-            self.deconv_up3 = self.batch_norm(self.deconv_up3)      
+            deconv_up2 = self.tconv2d(up1, 4, 256, 2)
+            deconv_up2 = self.batch_norm(deconv_up2)
+        up2 = self.conv_batchN_relu(tf.concat((deconv_up2, self.skip1), 3), 3, 1, 256, name='conv88') 
+        up2 = self.conv_batchN_relu(up2, 3, 1, 256, name='conv95')
+        return deconv_up1, deconv_up2, up2
 
-        if self.compute_normals:
-            self.output_normals = self.deconv_up3
-        else:
-            self.softmax = tf.nn.softmax(self.deconv_up3)
-            self.output_labels = self.softmax
-        ## Auxilary
-        if self.has_aux_loss:
-            self.aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
-            self.aux2 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
-            if not self.compute_normals:
-                self.aux1 = tf.nn.softmax(self.aux1)
-                self.aux2 = tf.nn.softmax(self.aux2)
-        
+    def setup(self, data):   
+        raise NotImplementedError()
+
     def compute_cosine_loss(self, label, weights, prediction):
         pred_norm = tf.nn.l2_normalize(prediction, axis=-1)
         label_norm = tf.nn.l2_normalize(label, axis=-1)
@@ -154,24 +145,29 @@ class AdapNet_pp(network_base.Network):
             loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1, weights=weights))
         return loss
 
-    def _create_loss(self, label):
-        self.loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), self.weights), axis=[3]))
-        if self.has_aux_loss:
-            aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1+1e-10), self.weights), axis=[3]))
-            aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2+1e-10), self.weights), axis=[3]))
+    def _create_loss(self, label, weights):
+        self.loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), weights), axis=[3]))
+        if self.aux_loss_mode in ['labels','both','true']:
+            aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1+1e-10), weights), axis=[3]))
+            aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2+1e-10), weights), axis=[3]))
             self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
 
     def _create_normal_loss(self, label, weights):
-        self.loss = self.compute_cosine_loss(label, weights, self.deconv_up3)
-        if self.has_aux_loss:
+        loss = self.compute_cosine_loss(label, weights, self.output_normals)
+        if self.aux_loss_mode in ['normals','both','true']:
             aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1)
             aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2)
             self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
+        return loss
+
+    def get_optimizer(self):
+        self.lr = self.create_lr()
+        self.opt = tf.train.AdamOptimizer(self.lr)
+        return self.opt
 
     def create_optimizer(self):
-        self.lr = tf.train.polynomial_decay(self.learning_rate, self.global_step,
-                                            self.decay_steps, power=self.power)
-        self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+        self.opt = self.get_optimizer()
+        self.train_op = self.opt.minimize(self.loss, global_step=self.global_step)
 
     def _create_summaries(self):
         with tf.name_scope("summaries"):
@@ -180,12 +176,17 @@ class AdapNet_pp(network_base.Network):
             self.summary_op = tf.summary.merge_all()
     
     def build_graph(self, data, depth=None, label=None, normals=None, valid_depths=None):
-        self._setup(data)
+        self.setup(data)
         if self.training:
-            if self.compute_normals:
-                self._create_normal_loss(normals, valid_depths)
-            else:
-                self._create_loss(label)
+            self.loss = 0
+            for modality, num_classes in self.modalities_num_classes.iteritems(): 
+                if modality == 'normals':
+                    self.normal_loss = self._create_normal_loss(normals, valid_depths)
+                    self.loss += self.normal_loss
+                elif modality == 'labels':
+                    self.label_loss = self._create_loss(label, self.weights['labels'])
+                    self.loss += self.label_loss
+
 
 def main():
     print 'Do Nothing'
