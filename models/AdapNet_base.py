@@ -24,7 +24,7 @@ class AdapNet_base(network_base.Network):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
-        self.has_aux_loss = aux_loss_mode in ['both','normals','labels','true']
+        self.aux_loss_mode = aux_loss_mode
         self.float_type = float_type
         self.power = power
         self.decay_steps = decay_steps
@@ -35,7 +35,6 @@ class AdapNet_base(network_base.Network):
         self.filters = [256, 512, 1024, 2048]
         self.strides = [1, 2, 2, 1]
         self.global_step = global_step
-        self.compute_normals = ('normals' in list(modalities_num_classes.keys()))
         if self.training:
             self.keep_prob = 0.5
         else:
@@ -146,19 +145,24 @@ class AdapNet_base(network_base.Network):
         return loss
 
     def _create_loss(self, label, weights):
-        self.loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), weights), axis=[3]))
+        loss = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.softmax+1e-10), weights), axis=[3]))
         if self.aux_loss_mode in ['labels','both','true']:
-            aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1+1e-10), weights), axis=[3]))
-            aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2+1e-10), weights), axis=[3]))
-            self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
+            aux_loss1 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux1_labels+1e-10), weights), axis=[3]))
+            aux_loss2 = tf.reduce_mean(-tf.reduce_sum(tf.multiply(label*tf.log(self.aux2_labels+1e-10), weights), axis=[3]))
+            loss = loss+0.6*aux_loss1+0.5*aux_loss2
+        return loss
 
     def _create_normal_loss(self, label, weights):
         loss = self.compute_cosine_loss(label, weights, self.output_normals)
         if self.aux_loss_mode in ['normals','both','true']:
-            aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1)
-            aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2)
-            self.loss = self.loss+0.6*aux_loss1+0.5*aux_loss2
+            aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1_normals)
+            aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2_normals)
+            loss = loss+0.6*aux_loss1+0.5*aux_loss2
         return loss
+
+    def create_lr(self):
+        return tf.train.polynomial_decay(self.learning_rate, self.global_step,
+                                            self.decay_steps, power=self.power)
 
     def get_optimizer(self):
         self.lr = self.create_lr()
@@ -173,6 +177,12 @@ class AdapNet_base(network_base.Network):
         with tf.name_scope("summaries"):
             tf.summary.scalar("loss", self.loss)
             tf.summary.histogram("histogram_loss", self.loss)
+
+            for modality in list(self.modalities_num_classes.keys()):
+                if modality == 'normals':
+                    tf.summary.scalar("normal_loss", self.normal_loss)
+                elif modality == 'labels':
+                    tf.summary.scalar("label_loss", self.label_loss)
             self.summary_op = tf.summary.merge_all()
     
     def build_graph(self, data, depth=None, label=None, normals=None, valid_depths=None):
