@@ -55,7 +55,7 @@ def train_func(config):
     module = importlib.import_module('models.'+config['model'])
     model_func = getattr(module, config['model'])
     helper = get_dataset(config)
-    modalities_num_classes, num_label_classes = extract_modalities(config)
+    modality_infos, num_label_classes = extract_modalities(config)
     data_list, iterator = helper.get_train_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
     global_step = tf.train.get_or_create_global_step()
@@ -66,7 +66,7 @@ def train_func(config):
     if 'aux_loss_mode' in config:
         aux_loss_mode = config['aux_loss_mode'].lower()
 
-    model = model_func(modalities_num_classes=modalities_num_classes, learning_rate=config['learning_rate'],
+    model = model_func(modality_infos=modality_infos, learning_rate=config['learning_rate'],
                        decay_steps=config['max_iteration'], power=config['power'],
                        global_step=global_step, aux_loss_mode=aux_loss_mode)
     if config['num_gpus'] == 1:

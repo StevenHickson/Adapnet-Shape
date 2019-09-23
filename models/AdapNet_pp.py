@@ -18,8 +18,7 @@ from AdapNet_base import AdapNet_base
 class AdapNet_pp(AdapNet_base):
     def setup(self, data):
         # There should only be one key, value in this dict.
-        self.modality = list(modalities_num_classes.keys())[0]
-        self.num_classes = modalities_num_classes[modality]
+        self.modality, self.num_classes, _ = modality_infos[0]
         self.input_shape = data.get_shape()
 
         self.eAspp_out = self.build_encoder(data)

@@ -22,7 +22,7 @@ class AdapNet_join(AdapNet_base):
         self.eAspp_out = self.build_encoder(data)
 
         ### Upsample/Decoders
-        for modality, num_classes in self.modalities_num_classes.iteritems(): 
+        for modality, num_classes, _ in self.modality_infos: 
             with tf.variable_scope(modality):
                 deconv_up1, deconv_up2, up2 = self.build_decoder()
                 up2 = self.conv_batchN_relu(up2, 1, 1, num_classes, name='conv78')

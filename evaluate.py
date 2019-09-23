@@ -96,7 +96,7 @@ def test_func(config):
     module = importlib.import_module('models.' + config['model'])
     model_func = getattr(module, config['model'])
     helper = get_dataset(config)
-    modalities_num_classes, num_label_classes = extract_modalities(config)
+    modality_infos, num_label_classes = extract_modalities(config)
     data_list, iterator = helper.get_test_data(config, num_label_classes)
     resnet_name = 'resnet_v2_50'
 
@@ -105,7 +105,7 @@ def test_func(config):
         aux_loss_mode = config['aux_loss_mode'].lower()
 
     with tf.variable_scope(resnet_name):
-        model = model_func(modalities_num_classes=modalities_num_classes, aux_loss_mode=aux_loss_mode, training=False)
+        model = model_func(modality_infos=modality_infos, aux_loss_mode=aux_loss_mode, training=False)
         images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config, train=False)
 
     config1 = tf.ConfigProto()

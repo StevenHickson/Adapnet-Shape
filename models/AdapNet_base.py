@@ -15,12 +15,12 @@
 import tensorflow as tf
 import network_base
 class AdapNet_base(network_base.Network):
-    def __init__(self, modalities_num_classes={'labels': 12}, learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
+    def __init__(self, modality_infos=[('labels', 12, 1.0)], learning_rate=0.001, float_type=tf.float32, weight_decay=0.0005,
                  decay_steps=30000, power=0.9, training=True, ignore_label=True, global_step=0,
                  aux_loss_mode='true'):
         
         super(AdapNet_base, self).__init__()
-        self.modalities_num_classes = modalities_num_classes
+        self.modality_infos = modality_infos
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.initializer = 'he'
@@ -40,7 +40,7 @@ class AdapNet_base(network_base.Network):
         else:
             self.keep_prob = 1.0
         self.weights = dict()
-        for modality, num_classes in modalities_num_classes.iteritems():
+        for modality, num_classes, _ in modalitiy_infos:
             if ignore_label:
                 weight = tf.ones(num_classes-1)
                 self.weights[modality] = tf.concat((tf.zeros(1), weight), 0)
@@ -178,7 +178,7 @@ class AdapNet_base(network_base.Network):
             tf.summary.scalar("loss", self.loss)
             tf.summary.histogram("histogram_loss", self.loss)
 
-            for modality in list(self.modalities_num_classes.keys()):
+            for modality, _, _ in self.modality_infos:
                 if modality == 'normals':
                     tf.summary.scalar("normal_loss", self.normal_loss)
                 elif modality == 'labels':
@@ -189,13 +189,13 @@ class AdapNet_base(network_base.Network):
         self.setup(data)
         if self.training:
             self.loss = 0
-            for modality, num_classes in self.modalities_num_classes.iteritems(): 
+            for modality, num_classes, weight_mul in self.modality_infos: 
                 if modality == 'normals':
                     self.normal_loss = self._create_normal_loss(normals, valid_depths)
-                    self.loss += self.normal_loss
+                    self.loss += weight_mul * self.normal_loss
                 elif modality == 'labels':
                     self.label_loss = self._create_loss(label, self.weights['labels'])
-                    self.loss += self.label_loss
+                    self.loss += weight_mul * self.label_loss
 
 
 def main():

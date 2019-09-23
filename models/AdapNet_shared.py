@@ -23,7 +23,7 @@ class AdapNet_shared(AdapNet_base):
 
         ### Upsample/Decoder
         deconv_up1, deconv_up2, up2 = self.build_decoder()
-        for modality, num_classes in self.modalities_num_classes.iteritems(): 
+        for modality, num_classes, _ in self.modality_infos: 
             with tf.variable_scope(modality):
                 up2 = self.conv_batchN_relu(up2, 1, 1, num_classes, name='conv78')
                 deconv_up3 = self.tconv2d(up2, 8, num_classes, 4)

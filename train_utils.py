@@ -16,13 +16,17 @@ def extract_normals(normals):
     return  tf.clip_by_value(tf.nn.l2_normalize(normals, axis=-1), -1.0, 1.0)
 
 def extract_modalities(config):
-    modalities_num_classes = dict()
+    modality_infos = []
     num_label_classes = 0
-    for modality, num_classes in zip(config['output_modality'], config['num_classes']):
-        modalities_num_classes[modality] = num_classes
+    if 'loss_weights' in config:
+        weight_mul_list = config['loss_weights']
+    else:
+        weight_mul_list = [1.0] * len(config['output_modality'])
+    for modality, num_classes, weight_mul in zip(config['output_modality'], config['num_classes'], weight_mul_list):
+        modality_infos.append((modality, num_classes, weight_mul))
         if modality == 'labels':
             num_label_classes = num_classes
-    return modalities_num_classes, num_label_classes
+    return modality_infos, num_label_classes
 
 def calculate_weights(depths, normals):
     valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
