@@ -40,7 +40,7 @@ class AdapNet_base(network_base.Network):
         else:
             self.keep_prob = 1.0
         self.weights = dict()
-        for modality, num_classes, _ in modalitiy_infos:
+        for modality, num_classes, _ in self.modality_infos:
             if ignore_label:
                 weight = tf.ones(num_classes-1)
                 self.weights[modality] = tf.concat((tf.zeros(1), weight), 0)
