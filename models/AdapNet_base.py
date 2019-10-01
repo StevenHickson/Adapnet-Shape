@@ -130,7 +130,7 @@ class AdapNet_base(network_base.Network):
         up2 = self.conv_batchN_relu(up2, 3, 1, 256, name='conv95')
         return deconv_up1, deconv_up2, up2
 
-    def create_output(modality, output, aux1, aux2):
+    def create_output(self, modality, output, aux1, aux2):
         if modality == 'labels':
             self.softmax = tf.nn.softmax(output)
             self.output_labels = self.softmax

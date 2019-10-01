@@ -30,6 +30,8 @@ def extract_modalities(config):
 
 def calculate_weights(depths, normals):
     valid_depths = tf.math.not_equal(tf.cast(depths, tf.float32), 0)
+    if normals is None:
+        return valid_depths
     valid_normals = tf.expand_dims(tf.math.not_equal(tf.reduce_sum(tf.math.abs(normals), axis=-1), 0), axis=-1)
     return tf.cast(tf.math.logical_and(valid_depths, valid_normals), tf.float32)
 
@@ -95,6 +97,10 @@ def setup_model(model, config, train=True):
             depth = depths_pl
             normals = extract_normals(normals_pl)
             weights = calculate_weights(depth, normals)
+        elif modality == 'depth':
+            depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depth, normals)
     
     model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     if train:
@@ -105,6 +111,8 @@ def setup_model(model, config, train=True):
                 labels_estimate = extract_labels(model.output_labels)
             elif modality == 'normals':
                 normals_estimate = extract_normals(model.output_normals)
+            elif modality == 'depth':
+                depth_estimate = model.output_depth
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
@@ -176,6 +184,10 @@ def setup_model_new(model, data_list, config, train=True):
             depth = depths_pl
             normals = extract_normals(normals_pl)
             weights = calculate_weights(depth, normals)
+        elif modality == 'depth':
+            depths_pl = data_list[1]
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depth, normals)
     
     model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     if train:
@@ -185,6 +197,8 @@ def setup_model_new(model, data_list, config, train=True):
                 labels_estimate = extract_labels(model.output_labels)
             elif modality == 'normals':
                 normals_estimate = extract_normals(model.output_normals)
+            elif modality == 'depth':
+                depth_estimate = model.output_depth
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
@@ -386,6 +400,15 @@ def add_metric_summaries(images=None,
         mean_iou, mean_update_op = tf.metrics.mean_iou(labels=labels, predictions=labels_estimate, num_classes=num_label_classes)
         tf.summary.scalar('m_iou', mean_iou)
         update_ops += [mean_update_op]
+    if depth_estimate is not None:
+        thresh = tf.math.maximum(depth / depth_estimate, depth_estimate / depth)
+        depth_metric1, update_op_depth1 = tf.metrics.percentage_below(thresh, 1.25, weights=depth_weights)
+        depth_metric2, update_op_depth2 = tf.metrics.percentage_below(thresh, 1.5625, weights=depth_weights)
+        depth_metric3, update_op_depth3 = tf.metrics.percentage_below(thresh, 1.953124, weights=depth_weights)
+        tf.summary.scalar('under_1.25', depth_metric1)
+        tf.summary.scalar('under_1.25^2', depth_metric2)
+        tf.summary.scalar('under_1.25^3', depth_metric3)
+        update_ops += [update_op_depth1, update_op_depth2, update_op_depth3]
     return update_ops
 
 def add_image_summaries(images=None,
