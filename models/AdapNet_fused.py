@@ -43,17 +43,7 @@ class AdapNet_fused(AdapNet_base):
         aux1_splits = tf.split(aux1, split_sizes, axis=-1)
         aux2_splits = tf.split(aux2, split_sizes, axis=-1)
         for modality, num_classes,_ in self.modality_infos: 
-            if modality == 'labels':
-                self.softmax = tf.nn.softmax(splits[split_id])
-                self.output_labels = self.softmax
-                if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_labels = tf.nn.softmax(aux1_splits[split_id])
-                    self.aux2_labels = tf.nn.softmax(aux2_splits[split_id])
-            elif modality == 'normals':
-                self.output_normals = splits[split_id]
-                if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_normals = aux1_splits[split_id]
-                    self.aux2_normals = aux2_splits[split_id]
+            self.create_output(modality, splits[split_id], aux1_splits[split_id], aux2_splits[split_id])
             split_id += 1
         
 def main():

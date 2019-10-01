@@ -34,17 +34,7 @@ class AdapNet_join(AdapNet_base):
                     aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
                     aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
 
-            if modality == 'labels':
-                self.softmax = tf.nn.softmax(deconv_up3)
-                self.output_labels = self.softmax
-                if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_labels = tf.nn.softmax(aux1)
-                    self.aux2_labels = tf.nn.softmax(aux2)
-            elif modality == 'normals':
-                self.output_normals = deconv_up3
-                if self.aux_loss_mode in [modality, 'both', 'true']:
-                    self.aux1_normals = aux1
-                    self.aux2_normals = aux2
+            self.create_output(modality, deconv_up3, aux1, aux2)
         
 def main():
     print 'Do Nothing'

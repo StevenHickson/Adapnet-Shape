@@ -29,18 +29,15 @@ class AdapNet_pp(AdapNet_base):
             self.deconv_up3 = self.tconv2d(up2, 8, self.num_classes, 4)
             self.deconv_up3 = self.batch_norm(self.deconv_up3)      
 
-        if self.modality == 'normals':
-            self.output_normals = self.deconv_up3
-        else:
-            self.softmax = tf.nn.softmax(self.deconv_up3)
-            self.output_labels = self.softmax
         ## Auxilary
         if self.aux_loss_mode in [self.modality, 'both', 'true']:
-            self.aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
-            self.aux2 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
-            if self.modality == 'labels':
-                self.aux1 = tf.nn.softmax(self.aux1)
-                self.aux2 = tf.nn.softmax(self.aux2)
+            aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
+            aux2 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
+        else:
+            aux1 = None
+            aux2 = None
+
+        self.create_output(modality, deconv_up3, aux1, aux2)
         
 def main():
     print 'Do Nothing'

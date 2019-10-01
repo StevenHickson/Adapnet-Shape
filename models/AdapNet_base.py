@@ -130,6 +130,24 @@ class AdapNet_base(network_base.Network):
         up2 = self.conv_batchN_relu(up2, 3, 1, 256, name='conv95')
         return deconv_up1, deconv_up2, up2
 
+    def create_output(modality, output, aux1, aux2):
+        if modality == 'labels':
+            self.softmax = tf.nn.softmax(output)
+            self.output_labels = self.softmax
+            if self.aux_loss_mode in [modality, 'both', 'true']:
+                self.aux1_labels = tf.nn.softmax(aux1)
+                self.aux2_labels = tf.nn.softmax(aux2)
+        elif modality == 'normals':
+            self.output_normals = output
+            if self.aux_loss_mode in [modality, 'both', 'true']:
+                self.aux1_normals = aux1
+                self.aux2_normals = aux2
+        elif modality == 'depth':
+            self.output_depth = output
+            if self.aux_loss_mode in [modality, 'both', 'true']:
+                self.aux1_depth = aux1
+                self.aux2_depth = aux2
+
     def setup(self, data):   
         raise NotImplementedError()
 
@@ -142,6 +160,24 @@ class AdapNet_base(network_base.Network):
             loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1))
         else:
             loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1, weights=weights))
+        return loss
+    
+    def compute_berhu_loss(self, label, prediction, weights):
+        preds = tf.cast(prediction, tf.float32)
+        labels = tf.cast(label, tf.float32)
+        if weights is None:
+            predict_valid = preds
+            labels_valid = labels
+        else:
+            casted_weights = tf.cast(weights, tf.float32)
+            predict_valid = tf.multiply(preds, casted_weights)
+            labels_valid = tf.multiply(labels, casted_weights)
+	abs_error = tf.abs(labels_valid - predict_valid)
+        c = 0.2 * tf.reduce_max(abs_error)
+        berhuloss = tf.where(abs_error <= c,
+                             abs_error,
+                             (tf.square(abs_error) + tf.square(c))/(2.0*c))
+        loss = tf.reduce_mean(berhuloss)
         return loss
 
     def _create_loss(self, label, weights):
@@ -157,6 +193,14 @@ class AdapNet_base(network_base.Network):
         if self.aux_loss_mode in ['normals','both','true']:
             aux_loss1 = self.compute_cosine_loss(label, weights, self.aux1_normals)
             aux_loss2 = self.compute_cosine_loss(label, weights, self.aux2_normals)
+            loss = loss+0.6*aux_loss1+0.5*aux_loss2
+        return loss
+
+    def _create_depth_loss(self, label, weights):
+        loss = self.compute_berhu_loss(label, self.output_depth, weights)
+        if self.aux_loss_mode in ['depth','both','true']:
+            aux_loss1 = self.compute_berhu_loss(label, self.aux1_depth, weights)
+            aux_loss2 = self.compute_berhu_loss(label, self.aux2_depth, weights)
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
         return loss
 
@@ -183,6 +227,8 @@ class AdapNet_base(network_base.Network):
                     tf.summary.scalar("normal_loss", self.normal_loss)
                 elif modality == 'labels':
                     tf.summary.scalar("label_loss", self.label_loss)
+                elif modality == 'depth':
+                    tf.summary.scalar("depth_loss", self.depth_loss)
             self.summary_op = tf.summary.merge_all()
     
     def build_graph(self, data, depth=None, label=None, normals=None, valid_depths=None):
@@ -196,6 +242,9 @@ class AdapNet_base(network_base.Network):
                 elif modality == 'labels':
                     self.label_loss = self._create_loss(label, self.weights['labels'])
                     self.loss += weight_mul * self.label_loss
+                if modality == 'depth':
+                    self.depth_loss = self._create_depth_loss(depth, valid_depths)
+                    self.loss += weight_mul * self.depth_loss
 
 
 def main():
