@@ -18,7 +18,7 @@ from AdapNet_base import AdapNet_base
 class AdapNet_pp(AdapNet_base):
     def setup(self, data):
         # There should only be one key, value in this dict.
-        self.modality, self.num_classes, _ = modality_infos[0]
+        self.modality, self.num_classes, _ = self.modality_infos[0]
         self.input_shape = data.get_shape()
 
         self.eAspp_out = self.build_encoder(data)
@@ -31,13 +31,13 @@ class AdapNet_pp(AdapNet_base):
 
         ## Auxilary
         if self.aux_loss_mode in [self.modality, 'both', 'true']:
-            aux1 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
-            aux2 = tf.image.resize_images(self.conv_batchN_relu(self.deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
+            aux1 = tf.image.resize_images(self.conv_batchN_relu(deconv_up2, 1, 1, self.num_classes, name='conv911', relu=False), [self.input_shape[1], self.input_shape[2]])
+            aux2 = tf.image.resize_images(self.conv_batchN_relu(deconv_up1, 1, 1, self.num_classes, name='conv912', relu=False), [self.input_shape[1], self.input_shape[2]])
         else:
             aux1 = None
             aux2 = None
 
-        self.create_output(modality, deconv_up3, aux1, aux2)
+        self.create_output(self.modality, self.deconv_up3, aux1, aux2)
         
 def main():
     print 'Do Nothing'
