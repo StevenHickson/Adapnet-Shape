@@ -161,10 +161,16 @@ class AdapNet_base(network_base.Network):
         else:
             loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1, weights=weights))
         return loss
+
+    def compute_depth_l1_loss(self, label, prediction, weights):
+        preds = tf.cast(prediction, tf.float32) / 1000.0
+        labels = tf.cast(label, tf.float32) / 1000.0
+        loss = tf.losses.absolute_difference(labels, preds, weights=weights)
+        return loss
     
     def compute_berhu_loss(self, label, prediction, weights):
-        preds = tf.cast(prediction, tf.float32)
-        labels = tf.cast(label, tf.float32)
+        preds = tf.cast(prediction, tf.float32) / 1000.0
+        labels = tf.cast(label, tf.float32) / 1000.0
         if weights is None:
             predict_valid = preds
             labels_valid = labels
@@ -197,10 +203,10 @@ class AdapNet_base(network_base.Network):
         return loss
 
     def _create_depth_loss(self, label, weights):
-        loss = self.compute_berhu_loss(label, self.output_depth, weights)
+        loss = self.compute_depth_l1_loss(label, self.output_depth, weights)
         if self.aux_loss_mode in ['depth','both','true']:
-            aux_loss1 = self.compute_berhu_loss(label, self.aux1_depth, weights)
-            aux_loss2 = self.compute_berhu_loss(label, self.aux2_depth, weights)
+            aux_loss1 = self.compute_depth_l1_loss(label, self.aux1_depth, weights)
+            aux_loss2 = self.compute_depth_l1_loss(label, self.aux2_depth, weights)
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
         return loss
 
