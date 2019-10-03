@@ -112,7 +112,7 @@ def setup_model(model, config, train=True):
             elif modality == 'normals':
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
-                depth_estimate = model.output_depth
+                depth_estimate = model.output_depth * 1000
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
@@ -198,7 +198,7 @@ def setup_model_new(model, data_list, config, train=True):
             elif modality == 'normals':
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
-                depth_estimate = model.output_depth
+                depth_estimate = model.output_depth * 1000
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
