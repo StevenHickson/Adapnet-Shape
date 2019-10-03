@@ -163,13 +163,13 @@ class AdapNet_base(network_base.Network):
         return loss
 
     def compute_depth_l1_loss(self, label, prediction, weights):
-        preds = tf.cast(prediction, tf.float32) / 1000.0
+        preds = tf.cast(prediction, tf.float32)
         labels = tf.cast(label, tf.float32) / 1000.0
         loss = tf.losses.absolute_difference(labels, preds, weights=weights)
         return loss
     
     def compute_berhu_loss(self, label, prediction, weights):
-        preds = tf.cast(prediction, tf.float32) / 1000.0
+        preds = tf.cast(prediction, tf.float32)
         labels = tf.cast(label, tf.float32) / 1000.0
         if weights is None:
             predict_valid = preds
