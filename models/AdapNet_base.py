@@ -1,4 +1,4 @@
-''' AdapNet++:  Self-Supervised Model Adaptation for Multimodal Semantic Segmentation
+'''AdapNet++:  Self-Supervised Model Adaptation for Multimodal Semantic Segmentation
 
  Copyright (C) 2018  Abhinav Valada, Rohit Mohan and Wolfram Burgard
 
@@ -142,7 +142,7 @@ class AdapNet_base(network_base.Network):
             if self.aux_loss_mode in [modality, 'both', 'true']:
                 self.aux1_normals = aux1
                 self.aux2_normals = aux2
-        elif modality == 'depth':
+        elif modality == 'depth' or modality == 'relative_depth':
             self.output_depth = output
             if self.aux_loss_mode in [modality, 'both', 'true']:
                 self.aux1_depth = aux1
@@ -162,15 +162,19 @@ class AdapNet_base(network_base.Network):
             loss = tf.reduce_mean(tf.losses.cosine_distance(label_clipped, clipped, axis=-1, weights=weights))
         return loss
 
-    def compute_depth_l1_loss(self, label, prediction, weights):
+    def compute_depth_l1_loss(self, label, prediction, weights, scale=True):
         preds = tf.cast(prediction, tf.float32)
-        labels = tf.cast(label, tf.float32) / 1000.0
+        labels = tf.cast(label, tf.float32)
+        if scale:
+            labels = labels / 1000.0
         loss = tf.losses.absolute_difference(labels, preds, weights=weights)
         return loss
     
-    def compute_berhu_loss(self, label, prediction, weights):
+    def compute_berhu_loss(self, label, prediction, weights, scale=True):
         preds = tf.cast(prediction, tf.float32)
-        labels = tf.cast(label, tf.float32) / 1000.0
+        labels = tf.cast(label, tf.float32)
+        if scale:
+            labels = labels / 1000.0
         if weights is None:
             predict_valid = preds
             labels_valid = labels
@@ -202,9 +206,9 @@ class AdapNet_base(network_base.Network):
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
         return loss
 
-    def _create_depth_loss(self, label, weights):
-        loss = self.compute_depth_l1_loss(label, self.output_depth, weights)
-        if self.aux_loss_mode in ['depth','both','true']:
+    def _create_depth_loss(self, label, weights, scale=True):
+        loss = self.compute_depth_l1_loss(label, self.output_depth, weights, scale)
+        if self.aux_loss_mode in ['depth','relative_depth','both','true']:
             aux_loss1 = self.compute_depth_l1_loss(label, self.aux1_depth, weights)
             aux_loss2 = self.compute_depth_l1_loss(label, self.aux2_depth, weights)
             loss = loss+0.6*aux_loss1+0.5*aux_loss2
@@ -233,7 +237,7 @@ class AdapNet_base(network_base.Network):
                     tf.summary.scalar("normal_loss", self.normal_loss)
                 elif modality == 'labels':
                     tf.summary.scalar("label_loss", self.label_loss)
-                elif modality == 'depth':
+                elif modality == 'depth' or modality == 'relative_depth':
                     tf.summary.scalar("depth_loss", self.depth_loss)
             self.summary_op = tf.summary.merge_all()
     
@@ -248,8 +252,12 @@ class AdapNet_base(network_base.Network):
                 elif modality == 'labels':
                     self.label_loss = self._create_loss(label, self.weights['labels'])
                     self.loss += weight_mul * self.label_loss
-                if modality == 'depth':
+                elif modality == 'depth':
                     self.depth_loss = self._create_depth_loss(depth, valid_depths)
+                    self.loss += weight_mul * self.depth_loss
+                elif modality == 'relative_depth':
+                    depth = depth / tf.math.reduce_max(depth)
+                    self.depth_loss = self._create_depth_loss(depth, valid_depths, scale=False)
                     self.loss += weight_mul * self.depth_loss
 
 

@@ -101,6 +101,11 @@ def setup_model(model, config, train=True):
             depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
             depth = tf.cast(depths_pl, tf.float32)
             weights = calculate_weights(depth, normals)
+        elif modality == 'relative_depth':
+            depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depths_pl, normals)
+            depth = depth / tf.math.reduce_max(depth)
     
     model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     if train:
@@ -113,6 +118,8 @@ def setup_model(model, config, train=True):
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
                 depth_estimate = model.output_depth * 1000
+            elif modality == 'relative_depth':
+                depth_estimate = model.output_depth
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
@@ -188,6 +195,11 @@ def setup_model_new(model, data_list, config, train=True):
             depths_pl = data_list[1]
             depth = tf.cast(depths_pl, tf.float32)
             weights = calculate_weights(depth, normals)
+        elif modality == 'relative_depth':
+            depths_pl = data_list[1]
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depths_pl, normals)
+            depth = depth / tf.math.reduce_max(depth)
     
     model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     if train:
@@ -199,6 +211,8 @@ def setup_model_new(model, data_list, config, train=True):
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
                 depth_estimate = model.output_depth * 1000
+            elif modality == 'relative_depth':
+                depth_estimate = model.output_depth
       
         add_image_summaries(images=images,
                             images_estimate=images_estimate,
@@ -239,6 +253,8 @@ def setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl,
             input_names_to_feeds['labels'] = data_list[3]
         elif modality == 'depth':
             input_names_to_feeds['depth'] = data_list[1]
+        elif modality == 'relative_depth':
+            input_names_to_feeds['depth'] = data_list[1]
         elif modality == 'normals':
             input_names_to_feeds['depth'] = data_list[1]
             input_names_to_feeds['normals'] = data_list[2]
@@ -278,6 +294,9 @@ def setup_sess_inputs(data_list, inputs, config):
             new_inputs.append(data_list[3])
             labels_added = True
         elif modality == 'depth' and not depth_added:
+            new_inputs.append(data_list[1])
+            depth_added = True
+        elif modality == 'relative_depth' and not depth_added:
             new_inputs.append(data_list[1])
             depth_added = True
         elif modality == 'normals'and not normals_added:
