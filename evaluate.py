@@ -81,16 +81,41 @@ def compute_normals_matrix(normals_gt, pred, depth, normals_matrix):
 
 def get_normals_metrics(normals_matrix, step):
     return normals_matrix / float(step + 1)
-    #return normals_matrix
 
-def print_info(labels_matrix, normals_matrix, step, total_num, finished=False):
+def compute_rmse(pred, labels):
+    return np.sqrt(((pred - labels) ** 2).mean(axis=-1))
+
+def compute_rel_error(pred, labels):
+    return (np.abs(pred - labels) / pred).mean(axis=-1)
+
+def compute_depth_matrix(depth_gt, pred, depth_matrix):
+    pred_squeezed = np.squeeze(pred)
+    depth_gt_squeezed = np.squeeze(depth_gt)
+    weights = ~(depth_gt_squeezed == 0)
+    num_weights = float(np.sum(weights))
+    pred_mask = pred_squeezed[weights]
+    depth_mask = depth_gt_squeezed[weights]
+    masked_dist = np.maximum(depth_mask / pred_mask, pred_mask / depth_mask)
+    below_1 = np.sum(masked_dist <= 1.25) / num_weights
+    below_2 = np.sum(masked_dist <= 1.5625) / num_weights
+    below_3 = np.sum(masked_dist <= 1.953124) / num_weights
+    rmse_val = compute_rmse(pred_mask, depth_mask) / 1000.0
+    rel_error = compute_rel_error(pred_mask, depth_mask)
+    depth_matrix += np.array([below_1, below_2, below_3, rmse_val, rel_error])
+    return depth_matrix
+
+def get_depth_metrics(depth_matrix, step):
+    return depth_matrix / float(step + 1)
+
+def print_info(labels_matrix, normals_matrix, depth_matrix, step, total_num, finished=False):
     normals_metrics = get_normals_metrics(normals_matrix, step)
+    depth_metrics = get_depth_metrics(depth_matrix, step)
     if not finished:
         print '%s %s] %d. iou updating' \
           % (str(datetime.datetime.now()), str(os.getpid()), total_num)
     print 'mIoU: ', compute_iou(labels_matrix)
     print '11.25: ', normals_metrics[0], '22.5: ', normals_metrics[1], '30: ', normals_metrics[2], 'mean angle error: ', normals_metrics[3]
-
+    print '1.25: ', depth_metrics[0], '1.25^2: ', depth_metrics[1], '1.25^3: ', depth_metrics[2], 'rmse', depth_metrics[3], 'rel err: ', depth_metrics[4]
 
 def test_func(config):
     module = importlib.import_module('models.' + config['model'])
@@ -121,12 +146,14 @@ def test_func(config):
     total_num = 0
     labels_matrix = np.zeros([num_label_classes, 3])
     normals_matrix = np.zeros([4])
+    depth_matrix = np.zeros([5])
     start_step = 0
     # Let's check to see if we have an inference checkpoint
     if 'save_dir' in config.keys():
         try:
             labels_matrix = np.load(config['save_dir'] + '/labels_matrix.npy')
             normals_matrix = np.load(config['save_dir'] + '/normals_matrix.npy')
+            depth_matrix = np.load(config['save_dir'] + '/depth_matrix.npy')
             with open(config['save_dir'] + '/output_step.txt', 'r') as f:
                 start_step = int(f.read().strip('\n'))
         except:
@@ -143,21 +170,26 @@ def test_func(config):
                         inputs[mod] = model.softmax
                     elif mod == 'normals':
                         inputs[mod] = model.output_normals
+                    elif mod == 'depth':
+                        inputs[mod] = model.output_depth * 1000
                 results = sess.run(list(inputs.values()), feed_dict=feed_dict)
                 for mod, result in zip(list(inputs.keys()), results):
                     if mod == 'labels':
                         labels_matrix = get_label_metrics(result, feed_dict, labels_pl, labels_matrix)
                     elif mod == 'normals':
                         normals_matrix = compute_normals_matrix(feed_dict[normals_pl], result, feed_dict[depths_pl], normals_matrix)
+                    elif mod == 'depth':
+                        depth_matrix = compute_depth_matrix(feed_dict[depths_pl], result, depth_matrix)
                     
                 total_num += config['batch_size']
                 if (step+1) % config['skip_step'] == 0:
-                    print_info(labels_matrix, normals_matrix, step, total_num, False)
+                    print_info(labels_matrix, normals_matrix, depth_matrix, step, total_num, False)
 
                 if 'save_dir' in config.keys() and (step+1) % 1000 == 0:
                     print('Saving evaluation')
                     np.save(config['save_dir'] + '/labels_matrix.npy', labels_matrix)
                     np.save(config['save_dir'] + '/normals_matrix.npy', normals_matrix)
+                    np.save(config['save_dir'] + '/depth_matrix.npy', depth_matrix)
                     with open(config['save_dir'] + '/output_step.txt', 'w') as f:
                         f.write(str(step))
             elif (step+1) % 500 == 0:
@@ -168,7 +200,7 @@ def test_func(config):
             step += 1
 
         except tf.errors.OutOfRangeError:
-            print_info(labels_matrix, normals_matrix, step - 1, total_num, True)
+            print_info(labels_matrix, normals_matrix, depth_matrix, step - 1, total_num, True)
             break
 
 def main():
