@@ -93,14 +93,13 @@ def compute_depth_matrix(depth_gt, pred, depth_matrix):
     depth_gt_squeezed = np.squeeze(depth_gt)
     weights = ~(depth_gt_squeezed == 0)
     num_weights = float(np.sum(weights))
-    pred_mask = pred_squeezed[weights]
-    depth_mask = depth_gt_squeezed[weights]
-    masked_dist = np.maximum(depth_mask / pred_mask, pred_mask / depth_mask)
+    dist = np.nan_to_num(np.maximum(depth_gt_squeezed / pred_squeezed, pred_squeezed / depth_gt_squeezed))
+    masked_dist = dist[weights]
     below_1 = np.sum(masked_dist <= 1.25) / num_weights
     below_2 = np.sum(masked_dist <= 1.5625) / num_weights
     below_3 = np.sum(masked_dist <= 1.953124) / num_weights
-    rmse_val = compute_rmse(pred_mask, depth_mask) / 1000.0
-    rel_error = compute_rel_error(pred_mask, depth_mask)
+    rmse_val = compute_rmse(pred_squeezed[weights], depth_gt_squeezed[weights]) / 1000.0
+    rel_error = compute_rel_error(pred_squeezed[weights], depth_gt_squeezed[weights])
     depth_matrix += np.array([below_1, below_2, below_3, rmse_val, rel_error])
     return depth_matrix
 
