@@ -1,6 +1,7 @@
 # Undo/temp files
 *.un~
 nohup.out
+.nfs*
 
 # Checkpoints/graphs
 graphs*/
