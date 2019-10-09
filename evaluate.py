@@ -133,7 +133,7 @@ def test_func(config):
         images_pl, depths_pl, normals_pl, labels_pl, update_ops = setup_model(model, config, train=False)
 
     config1 = tf.ConfigProto()
-    config1.gpu_options.allow_growth = True
+    #config1.gpu_options.allow_growth = True
     sess = tf.Session(config=config1)
     sess.run(tf.global_variables_initializer())
     import_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
