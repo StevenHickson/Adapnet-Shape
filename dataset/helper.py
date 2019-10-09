@@ -119,9 +119,13 @@ class DatasetHelper:
 
     def get_train_data(self, config, num_label_classes):
         dataset = self.get_batch('train_data', config, num_label_classes)
-        dataset = dataset.shuffle(buffer_size=200)
+        if 'buffer_size' in config:
+            num_buffer = config['buffer_size']
+        else:
+            num_buffer = 200
+        dataset = dataset.shuffle(buffer_size=num_buffer)
         dataset = dataset.batch(config['batch_size'])
-        dataset = dataset.repeat(200)
+        dataset = dataset.repeat(num_buffer)
         dataset = dataset.prefetch(32)
         iterator = dataset.make_one_shot_iterator()
         rgb, depth, normals, label = iterator.get_next()
