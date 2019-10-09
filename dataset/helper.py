@@ -21,6 +21,7 @@ import os
 import sys
 sys.path.append('/nethome/shickson3/CreateNormals/')
 from python.calc_normals import NormalCalculation
+from augmentation import augment_images
 
 output_width = None
 output_height = None
@@ -89,6 +90,10 @@ class DatasetHelper:
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         normals_decoded = cv2.resize(normals_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = self.MapLabels(label_decoded)
+
+        # Augment the images if the parameters are in the config file.
+        image_decoded, depth_decoded, normals_decoded, label_decoded = augment_images(image_decoded, depth_decoded, normals_decoded, label_decoded, self.config)
+
         return image_decoded, depth_decoded, normals_decoded, label_decoded, num_label_classes
 
     def get_batch(self, split, config, num_label_classes):
