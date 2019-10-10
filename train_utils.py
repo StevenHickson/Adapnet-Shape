@@ -109,7 +109,13 @@ def setup_model(model, config, train=True):
     
     model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
     if train:
-        model.create_optimizer()
+        if 'fine_tune' in config and config['fine_tune'] == 1:
+            var_list = []
+            for modality in config['output_modality']:
+                var_list.extend(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'resnet_v2_50/' + modality))
+            model.create_optimizer(var_list=var_list)
+        else:
+            model.create_optimizer()
         
         for modality in config['output_modality']:
             if modality == 'labels':

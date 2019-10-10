@@ -223,9 +223,9 @@ class AdapNet_base(network_base.Network):
         self.opt = tf.train.AdamOptimizer(self.lr)
         return self.opt
 
-    def create_optimizer(self):
+    def create_optimizer(self, var_list=None):
         self.opt = self.get_optimizer()
-        self.train_op = self.opt.minimize(self.loss, global_step=self.global_step)
+        self.train_op = self.opt.minimize(self.loss, global_step=self.global_step, var_list=var_list)
 
     def _create_summaries(self):
         with tf.name_scope("summaries"):
