@@ -123,9 +123,13 @@ class DatasetHelper:
             num_buffer = config['buffer_size']
         else:
             num_buffer = 200
+        if 'data_repeat' in config:
+            data_repeat = config['data_repeat']
+        else:
+            data_repeat = 100
         dataset = dataset.shuffle(buffer_size=num_buffer)
         dataset = dataset.batch(config['batch_size'])
-        dataset = dataset.repeat(num_buffer)
+        dataset = dataset.repeat(data_repeat)
         dataset = dataset.prefetch(32)
         iterator = dataset.make_one_shot_iterator()
         rgb, depth, normals, label = iterator.get_next()
