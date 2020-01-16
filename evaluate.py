@@ -86,14 +86,14 @@ def compute_rmse(pred, labels):
     return np.sqrt(((pred - labels) ** 2).mean(axis=-1))
 
 def compute_rel_error(pred, labels):
-    return (np.abs(pred - labels) / pred).mean(axis=-1)
+    return (np.abs(pred - labels) / (pred+1e-10)).mean(axis=-1)
 
 def compute_depth_matrix(depth_gt, pred, depth_matrix):
     pred_squeezed = np.squeeze(pred)
     depth_gt_squeezed = np.squeeze(depth_gt)
     weights = ~(depth_gt_squeezed == 0)
     num_weights = float(np.sum(weights))
-    dist = np.nan_to_num(np.maximum(depth_gt_squeezed / pred_squeezed, pred_squeezed / depth_gt_squeezed))
+    dist = np.nan_to_num(np.maximum(depth_gt_squeezed / (pred_squeezed+1e-10), pred_squeezed / (depth_gt_squeezed+1e-10)))
     masked_dist = dist[weights]
     below_1 = np.sum(masked_dist <= 1.25) / num_weights
     below_2 = np.sum(masked_dist <= 1.5625) / num_weights
