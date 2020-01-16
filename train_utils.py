@@ -152,6 +152,106 @@ def setup_model(model, config, train=True):
         update_ops=tf.no_op()
     return images_pl, depths_pl, normals_pl, labels_pl, update_ops
 
+def setup_model_flops(model, config, train=True):
+    images=None
+    images_estimate=None
+    depth=None
+    images_pl=None
+    depths_pl=None
+    normals_pl=None
+    labels_pl=None
+    depth_estimate=None
+    normals=None
+    normals_estimate=None
+    labels=None
+    labels_estimate=None
+    weights = None
+    num_label_classes = None
+
+    if config['input_modality'] == 'rgb':
+        images_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
+        images=images_pl
+        model_input = images_pl
+    elif config['input_modality'] == 'normals':
+        normals_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
+        normals = extract_normals(normals_pl)
+        model_input = normals_pl
+    elif config['input_modality'] == 'depth':
+        depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
+        depth = tf.cast(depths_pl, tf.float32)
+        model_input = tf.tile(depth, [1,1,1,3])
+    elif config['input_modality'] == 'depth_notile':
+        depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
+        depth = tf.cast(depths_pl, tf.float32)
+        model_input = depth
+    
+    for modality, num_classes in zip(config['output_modality'], config['num_classes']):
+        if modality == 'labels':
+            labels_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'],
+                                                num_classes])
+            labels = extract_labels(labels_pl)
+            num_label_classes = num_classes
+        elif modality == 'normals':
+            normals_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
+            depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
+            depth = depths_pl
+            normals = extract_normals(normals_pl)
+            weights = calculate_weights(depth, normals)
+        elif modality == 'depth':
+            depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depth, normals)
+        elif modality == 'relative_depth':
+            depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
+            depth = tf.cast(depths_pl, tf.float32)
+            weights = calculate_weights(depths_pl, normals)
+            depth = depth / tf.math.reduce_max(depth)
+    
+    model.build_graph(model_input, depth=depths_pl, label=labels_pl, normals=normals_pl, valid_depths=weights)
+    if train:
+        if 'fine_tune' in config and config['fine_tune'] == 1:
+            var_list = []
+            for modality in config['output_modality']:
+                var_list.extend(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'resnet_v2_50/' + modality))
+            model.create_optimizer(var_list=var_list)
+        else:
+            model.create_optimizer()
+        
+        for modality in config['output_modality']:
+            if modality == 'labels':
+                labels_estimate = extract_labels(model.output_labels)
+            elif modality == 'normals':
+                normals_estimate = extract_normals(model.output_normals)
+            elif modality == 'depth':
+                depth_estimate = model.output_depth * 1000
+            elif modality == 'relative_depth':
+                depth_estimate = model.output_depth
+      
+        add_image_summaries(images=images,
+                            images_estimate=images_estimate,
+                            depth=depth,
+                            depth_estimate=depth_estimate,
+                            normals=normals,
+                            normals_estimate=normals_estimate,
+                            labels=labels,
+                            labels_estimate=labels_estimate,
+                            num_label_classes=num_label_classes)
+        update_ops = add_metric_summaries(images=images,
+                                          images_estimate=images_estimate,
+                                          depth=depth,
+                                          depth_estimate=depth_estimate,
+                                          normals=normals,
+                                          normals_estimate=normals_estimate,
+                                          depth_weights=weights,
+                                          labels=labels,
+                                          labels_estimate=labels_estimate,
+                                          num_label_classes=num_label_classes)
+
+        model._create_summaries()
+    else:
+        update_ops=tf.no_op()
+    return images_pl, depths_pl, normals_pl, labels_pl, update_ops
+
 def setup_model_new(model, data_list, config, train=True):
     images=None
     images_estimate=None
