@@ -44,9 +44,10 @@ def optimistic_restore(session, save_file, graph=tf.get_default_graph()):
             if var.name.split(':')[0] in saved_shapes])
     restore_vars = []
     for var_name, saved_var_name in var_names:
+        print(var_name + ' = ' + saved_var_name)
         curr_var = graph.get_tensor_by_name(var_name)
         var_shape = curr_var.get_shape().as_list()
-        if var_shape == saved_shapes[saved_var_name]:
+        if 'global_step' not in var_name and var_shape == saved_shapes[saved_var_name]:
             restore_vars.append(curr_var)
     saver = tf.train.Saver(restore_vars, reshape=True)
     saver.restore(session, save_file)
