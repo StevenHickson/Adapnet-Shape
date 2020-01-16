@@ -85,7 +85,10 @@ class DatasetHelper:
             normals_decoded = self.normal_calculator.Calculate(depth_decoded, resized_labels)
         else:
             normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
-        image_decoded = cv2.cvtColor(cv2.resize(image_decoded, (self.config['width'],self.config['height'])), cv2.COLOR_BGR2RGB)
+        if dataset_name in ['nyu13', 'nyu20', 'nyu40']:
+            image_decoded = cv2.resize(image_decoded, (self.config['width'],self.config['height']))
+        else:
+            image_decoded = cv2.cvtColor(cv2.resize(image_decoded, (self.config['width'],self.config['height'])), cv2.COLOR_BGR2RGB)
         depth_decoded = cv2.resize(depth_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         label_decoded = cv2.resize(label_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
         normals_decoded = cv2.resize(normals_decoded, (self.config['width'],self.config['height']), interpolation=cv2.INTER_NEAREST)
