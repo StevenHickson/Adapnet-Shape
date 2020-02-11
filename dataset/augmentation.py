@@ -11,9 +11,9 @@ def rotate_images(image, depth, normals, label, max_rotation):
     (cX, cY) = (w // 2, h // 2)
     M = cv2.getRotationMatrix2D((cX, cY), random_degree, 1.0)
     new_image = cv2.warpAffine(image, M, (w, h))
-    new_depth = cv2.warpAffine(depth, M, (w, h))
-    new_label = cv2.warpAffine(label, M, (w, h))
-    rot_normals = cv2.warpAffine(normals, M, (w, h))
+    new_depth = cv2.warpAffine(depth, M, (w, h), flags=cv2.INTER_NEAREST)
+    new_label = cv2.warpAffine(label, M, (w, h), flags=cv2.INTER_NEAREST)
+    rot_normals = cv2.warpAffine(normals, M, (w, h), flags=cv2.INTER_NEAREST)
     # Recalculate normals
     random_rads = math.radians(random_degree)
     cos_val = math.cos(random_rads)
