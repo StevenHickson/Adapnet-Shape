@@ -72,17 +72,31 @@ class DatasetHelper:
         return image_decoded, depth_decoded, label_decoded
 
     def _read_images_function(self, image_file, depth_file, label_file, num_label_classes, dataset_name, compute_normals):
-        image_decoded = cv2.imread(image_file.decode(), cv2.IMREAD_COLOR)
+        image_file_name = image_file.decode()
+        image_decoded = cv2.imread(image_file_name, cv2.IMREAD_COLOR)
         depth_decoded = cv2.imread(depth_file.decode(), cv2.IMREAD_ANYDEPTH)
         label_decoded = cv2.imread(label_file.decode(), cv2.IMREAD_ANYDEPTH)
+        normals_decoded = None
         if image_decoded is None or label_decoded is None or depth_decoded is None:
             image_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.uint8)
             label_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
             depth_decoded = np.zeros((self.config['height'], self.config['width']), dtype=np.uint16)
             normals_decoded = np.zeros((self.config['height'], self.config['width'], 3), dtype=np.float32)
-        elif compute_normals:
+        elif compute_normals == 1:
             resized_labels = cv2.resize(label_decoded, depth_decoded.shape[::-1], interpolation=cv2.INTER_NEAREST)
             normals_decoded = self.normal_calculator.Calculate(depth_decoded, resized_labels)
+        elif compute_normals == 2:
+            nq_direc = image_file_name.replace('images', 'normals_quant')
+            fields = nq_direc.split('/')
+            file_num_fields = fields[-1].split('.')
+            fields[-1] = file_num_fields[0].zfill(4) + '.' + file_num_fields[1]
+            nq_direc = '/'.join(fields)
+            normals_decoded = cv2.imread(nq_direc, cv2.IMREAD_COLOR).astype(np.float32) / 255.0
+            if normals_decoded is None:
+                normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
+                print('Normals file does not exist')
+            else:
+                normals_decoded = normals_decoded.astype(np.float32)
         else:
             normals_decoded = np.zeros_like(image_decoded).astype(np.float32)
         if dataset_name in ['nyu13', 'nyu20', 'nyu40']:
@@ -101,7 +115,10 @@ class DatasetHelper:
 
     def get_batch(self, split, config, num_label_classes):
         filenames = config[split]
-        compute_normals = ('normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals')
+        if 'normals_quant' in self.config['output_modality'] or self.config['input_modality'] == 'normals_quant':
+            compute_normals = 2
+        elif 'normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals':
+            compute_normals = 1
         image_files = []
         depth_files = []
         label_files = []

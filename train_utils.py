@@ -72,7 +72,7 @@ def setup_model(model, config, train=True):
         images_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         images=images_pl
         model_input = images_pl
-    elif config['input_modality'] == 'normals':
+    elif config['input_modality'] in ['normals','normals_quant']:
         normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
         normals = extract_normals(normals_pl)
         model_input = normals_pl
@@ -91,7 +91,7 @@ def setup_model(model, config, train=True):
                                                 num_classes])
             labels = extract_labels(labels_pl)
             num_label_classes = num_classes
-        elif modality == 'normals':
+        elif modality in ['normals','normals_quant']:
             normals_pl = tf.placeholder(tf.float32, [None, config['height'], config['width'], 3])
             depths_pl = tf.placeholder(tf.uint16, [None, config['height'], config['width'], 1])
             depth = depths_pl
@@ -120,7 +120,7 @@ def setup_model(model, config, train=True):
         for modality in config['output_modality']:
             if modality == 'labels':
                 labels_estimate = extract_labels(model.output_labels)
-            elif modality == 'normals':
+            elif modality in ['normals','normals_quant']:
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
                 depth_estimate = model.output_depth * 1000
@@ -172,7 +172,7 @@ def setup_model_flops(model, config, train=True):
         images_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
         images=images_pl
         model_input = images_pl
-    elif config['input_modality'] == 'normals':
+    elif config['input_modality'] in ['normals','normals_quant']:
         normals_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
         normals = extract_normals(normals_pl)
         model_input = normals_pl
@@ -191,7 +191,7 @@ def setup_model_flops(model, config, train=True):
                                                 num_classes])
             labels = extract_labels(labels_pl)
             num_label_classes = num_classes
-        elif modality == 'normals':
+        elif modality in ['normals','normals_quant']:
             normals_pl = tf.ones(dtype=tf.float32, shape=[1, config['height'], config['width'], 3])
             depths_pl = tf.ones(dtype=tf.uint16, shape=[1, config['height'], config['width'], 1])
             depth = depths_pl
@@ -220,7 +220,7 @@ def setup_model_flops(model, config, train=True):
         for modality in config['output_modality']:
             if modality == 'labels':
                 labels_estimate = extract_labels(model.output_labels)
-            elif modality == 'normals':
+            elif modality in ['normals','normals_quant']:
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
                 depth_estimate = model.output_depth * 1000
@@ -272,7 +272,7 @@ def setup_model_new(model, data_list, config, train=True):
         images_pl = data_list[0]
         images=images_pl
         model_input = images_pl
-    elif config['input_modality'] == 'normals':
+    elif config['input_modality'] in ['normals','normals_quant']:
         normals_pl = data_list[2]
         normals = extract_normals(normals_pl)
         model_input = normals_pl
@@ -291,7 +291,7 @@ def setup_model_new(model, data_list, config, train=True):
             labels_pl = data_list[3]
             labels = extract_labels(labels_pl)
             num_label_classes = num_classes
-        elif modality == 'normals':
+        elif modality in ['normals','normals_quant']:
             normals_pl = data_list[2]
             depths_pl = data_list[1]
             depth = depths_pl
@@ -313,7 +313,7 @@ def setup_model_new(model, data_list, config, train=True):
         for modality in config['output_modality']:
             if modality == 'labels':
                 labels_estimate = extract_labels(model.output_labels)
-            elif modality == 'normals':
+            elif modality in ['normals','normals_quant']:
                 normals_estimate = extract_normals(model.output_normals)
             elif modality == 'depth':
                 depth_estimate = model.output_depth * 1000
@@ -351,7 +351,7 @@ def setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl,
         input_names_to_feeds['rgb'] = data_list[0]
     elif config['input_modality'] == 'depth' or config['input_modality'] == 'depth_notile':
         input_names_to_feeds['depth'] = data_list[1]
-    elif config['input_modality'] == 'normals':
+    elif config['input_modality'] in ['normals','normals_quant']:
         input_names_to_feeds['normals'] = data_list[2]
 
     for modality in config['output_modality']:
@@ -361,7 +361,7 @@ def setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl,
             input_names_to_feeds['depth'] = data_list[1]
         elif modality == 'relative_depth':
             input_names_to_feeds['depth'] = data_list[1]
-        elif modality == 'normals':
+        elif modality in ['normals','normals_quant']:
             input_names_to_feeds['depth'] = data_list[1]
             input_names_to_feeds['normals'] = data_list[2]
 
@@ -372,7 +372,7 @@ def setup_feeddict(data_list, sess, images_pl, depths_pl, normals_pl, labels_pl,
             feed_dict[images_pl] = feed
         elif name == 'depth':
             feed_dict[depths_pl] = feed
-        elif name == 'normals':
+        elif name in ['normals','normals_quant']:
             feed_dict[normals_pl] = feed
         elif name == 'labels':
             feed_dict[labels_pl] = feed
@@ -391,7 +391,7 @@ def setup_sess_inputs(data_list, inputs, config):
     elif config['input_modality'] == 'depth' or config['input_modality'] == 'depth_notile':
         new_inputs.append(data_list[1])
         depth_added = True
-    elif config['input_modality'] == 'normals':
+    elif config['input_modality'] in ['normals','normals_quant']:
         new_inputs.append(data_list[2])
         normals_added = True
 
@@ -405,7 +405,7 @@ def setup_sess_inputs(data_list, inputs, config):
         elif modality == 'relative_depth' and not depth_added:
             new_inputs.append(data_list[1])
             depth_added = True
-        elif modality == 'normals'and not normals_added:
+        elif modality in ['normals','normals_quant'] and not normals_added:
             if not depth_added:
                 new_inputs.append(data_list[1])
                 depth_added = True

@@ -137,7 +137,7 @@ class AdapNet_base(network_base.Network):
             if self.aux_loss_mode in [modality, 'both', 'true']:
                 self.aux1_labels = tf.nn.softmax(aux1)
                 self.aux2_labels = tf.nn.softmax(aux2)
-        elif modality == 'normals':
+        elif modality in ['normals','normals_quant']:
             self.output_normals = output
             if self.aux_loss_mode in [modality, 'both', 'true']:
                 self.aux1_normals = aux1
@@ -233,7 +233,7 @@ class AdapNet_base(network_base.Network):
             tf.summary.histogram("histogram_loss", self.loss)
 
             for modality, _, _ in self.modality_infos:
-                if modality == 'normals':
+                if modality in ['normals','normals_quant']:
                     tf.summary.scalar("normal_loss", self.normal_loss)
                 elif modality == 'labels':
                     tf.summary.scalar("label_loss", self.label_loss)
@@ -246,7 +246,7 @@ class AdapNet_base(network_base.Network):
         if self.training:
             self.loss = 0
             for modality, num_classes, weight_mul in self.modality_infos: 
-                if modality == 'normals':
+                if modality in ['normals','normals_quant']:
                     self.normal_loss = self._create_normal_loss(normals, valid_depths)
                     self.loss += weight_mul * self.normal_loss
                 elif modality == 'labels':
