@@ -167,7 +167,7 @@ def test_func(config):
                 for mod in config['output_modality']:
                     if mod == 'labels':
                         inputs[mod] = model.softmax
-                    elif mod == 'normals':
+                    elif mod in ['normals', 'normals_quant']:
                         inputs[mod] = model.output_normals
                     elif mod == 'depth':
                         inputs[mod] = model.output_depth * 1000
@@ -175,7 +175,7 @@ def test_func(config):
                 for mod, result in zip(list(inputs.keys()), results):
                     if mod == 'labels':
                         labels_matrix = get_label_metrics(result, feed_dict, labels_pl, labels_matrix)
-                    elif mod == 'normals':
+                    elif mod in ['normals', 'normals_quant']:
                         normals_matrix = compute_normals_matrix(feed_dict[normals_pl], result, feed_dict[depths_pl], normals_matrix)
                     elif mod == 'depth':
                         depth_matrix = compute_depth_matrix(feed_dict[depths_pl], result, depth_matrix)

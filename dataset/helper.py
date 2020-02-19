@@ -119,6 +119,8 @@ class DatasetHelper:
             compute_normals = 2
         elif 'normals' in self.config['output_modality'] or self.config['input_modality'] == 'normals':
             compute_normals = 1
+        else:
+            compute_normals = 0
         image_files = []
         depth_files = []
         label_files = []
