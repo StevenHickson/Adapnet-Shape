@@ -8,6 +8,7 @@ from dataset.nyu20_dataset import NYU20Dataset
 from dataset.nyu40_dataset import NYU40Dataset
 from dataset.scenenet_dataset import ScenenetDataset
 from dataset.scannet_dataset import ScannetDataset
+from dataset.cityscape19_dataset import Cityscape19Dataset
 
 def extract_labels(labels):
     return tf.math.argmax(labels, axis=-1)
@@ -47,6 +48,8 @@ def get_dataset(config):
         helper = ScenenetDataset()
     elif dataset_name == 'scannet':
         helper = ScannetDataset()
+    elif dataset_name == 'cityscapes19':
+        helper = Cityscape19Dataset()
     else:
         print('Non-existant Dataset')
     helper.Setup(config)
