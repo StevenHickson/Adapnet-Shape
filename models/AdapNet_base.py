@@ -114,7 +114,7 @@ class AdapNet_base(network_base.Network):
         eAspp_out = self.conv_batchN_relu(tf.concat((self.IA, self.IB, self.IC, self.ID, self.IE), 3), 1, 1, 256, name='conv10', relu=False)
         return eAspp_out
         
-    def build_decoder(self):
+    def build_decoder_stage1(self):
         aux1 = None
         aux2 = None
         with tf.variable_scope('conv41'):
@@ -123,11 +123,19 @@ class AdapNet_base(network_base.Network):
 
         up1 = self.conv_batchN_relu(tf.concat((deconv_up1, self.skip2), 3), 3, 1, 256, name='conv89') 
         up1 = self.conv_batchN_relu(up1, 3, 1, 256, name='conv96')
+        return deconv_up1, up1
+
+    def build_decoder_stage2(self, up1):
         with tf.variable_scope('conv16'):
             deconv_up2 = self.tconv2d(up1, 4, 256, 2)
             deconv_up2 = self.batch_norm(deconv_up2)
         up2 = self.conv_batchN_relu(tf.concat((deconv_up2, self.skip1), 3), 3, 1, 256, name='conv88') 
         up2 = self.conv_batchN_relu(up2, 3, 1, 256, name='conv95')
+        return deconv_up2, up2
+
+    def build_decoder(self):
+        deconv_up1, up1 = self.build_decoder_stage1()
+        deconv_up2, up2 = self.build_decoder_stage2(up1)
         return deconv_up1, deconv_up2, up2
 
     def create_output(self, modality, output, aux1, aux2):
