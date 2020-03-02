@@ -25,6 +25,7 @@ class AdapNet_pp(AdapNet_base):
 
         ### Upsample/Decoder
         deconv_up1, deconv_up2, up2 = self.build_decoder()
+        up2 = self.conv_batchN_relu(up2, 1, 1, self.num_classes, name='conv78')
         with tf.variable_scope('conv5'):
             self.deconv_up3 = self.tconv2d(up2, 8, self.num_classes, 4)
             self.deconv_up3 = self.batch_norm(self.deconv_up3)      
